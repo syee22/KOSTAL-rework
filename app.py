@@ -76,18 +76,18 @@ with n_col:
         df = df_all
     st.markdown(f"**{len(df)}건**")
 
-# 통계 및 리스트
+# 통계 및 리스트 표시
 u_cnt = len(df[df['is_update'] == 'Y'])
 d_cnt = len(df[df['is_dtc'] == 'Y'])
 
 t_col, b_col = st.columns([6, 4])
 with t_col:
-    st.markdown(f"##### 📋 리스트 <span style='color:blue; font-size:12px;'>| 업뎃:{u_cnt} | DTC:{d_cnt}</span>", unsafe_allow_html=True)
+    # 텍스트 변경 및 통계 표시 순서 조정
+    st.markdown(f"##### 📋 등록 현황 <span style='color:black;'>{len(df)}건</span> <span style='color:blue; font-size:12px;'>| 업뎃:{u_cnt} | DTC:{d_cnt}</span>", unsafe_allow_html=True)
 with b_col:
     if not df.empty:
         df_ex = df.copy()
         df_ex['순번'] = range(1, len(df)+1)
-        # 컬럼명 변경 적용
         df_ex = df_ex[['순번', 'timestamp', 'author', 'item_name', 'is_update', 'is_dtc']]
         df_ex.columns = ['순번', '시간', '이름', 'VIN', '업데이트', 'DTC']
         
