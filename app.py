@@ -34,7 +34,6 @@ def delete_data(id):
 st.set_page_config(page_title="KOSTAL Mobile", layout="centered")
 st.markdown("#### 📱 KOSTAL 리워크 현황")
 
-# 수정 모드 상태
 if "edit_id" not in st.session_state: st.session_state.edit_id = None
 
 with st.form("entry_form"):
@@ -53,16 +52,19 @@ with st.form("entry_form"):
 
 st.write("---")
 
-# 검색 및 현황 리스트
+# 검색 및 데이터 로드
 df = pd.read_sql_query("SELECT * FROM items ORDER BY id DESC", conn)
 search = st.text_input("🔍 이름 또는 VIN 검색")
 if search:
     df = df[df['item_name'].str.contains(search, na=False) | df['author'].str.contains(search, na=False)]
 
-# 상단 타이틀 + 엑셀 저장
+# 통계 및 리스트 표시
+u_cnt = len(df[df['is_update'] == 'Y'])
+d_cnt = len(df[df['is_dtc'] == 'Y'])
+
 t_col, b_col = st.columns([6, 4])
 with t_col:
-    st.markdown(f"##### 📋 리스트 <span style='color:red;'>({len(df)})</span>", unsafe_allow_html=True)
+    st.markdown(f"##### 📋 리스트 <span style='color:red;'>({len(df)})</span> <span style='color:blue; font-size:12px;'>| 업뎃:{u_cnt} | DTC:{d_cnt}</span>", unsafe_allow_html=True)
 with b_col:
     if not df.empty:
         df_ex = df.copy()
@@ -71,7 +73,6 @@ with b_col:
         df_ex[['순번', 'timestamp', 'author', 'item_name', 'is_update', 'is_dtc']].to_excel(towrite, index=False)
         st.download_button("📥 엑셀 저장", towrite.getvalue(), "list.xlsx", use_container_width=True)
 
-# 리스트 표시
 for row in df.itertuples():
     cols = st.columns([6, 2, 2])
     with cols[0]:
