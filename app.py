@@ -9,7 +9,7 @@ from PIL import Image
 import openpyxl
 from openpyxl.drawing.image import Image as OpenpyxlImage
 
-# --- 1. 데이터베이스 및 사진 관련 설정 ---
+# --- 1. 데이터베이스 초기화 ---
 def init_db():
     conn = sqlite3.connect("kostal_rework_v3.db", check_same_thread=False)
     cursor = conn.cursor()
@@ -49,6 +49,11 @@ def delete_data(item_id):
 def load_data():
     return pd.read_sql_query("SELECT * FROM items ORDER BY id DESC", conn)
 
+def clear_data():
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM items")
+    conn.commit()
+
 # --- 3. UI 및 상태 관리 ---
 st.set_page_config(page_title="KOSTAL Mobile", layout="centered")
 st.markdown("#### 📱 KOSTAL 시스템")
@@ -63,7 +68,6 @@ c1, c2 = st.columns(2)
 chk_update = c1.checkbox("업데이트", value=st.session_state.get("form_update", False), key="main_upd")
 chk_dtc = c2.checkbox("DTC", value=st.session_state.get("form_dtc", False), key="main_dtc")
 
-# 사진 업로드 추가
 uploaded_file = st.file_uploader("📸 현장 사진 촬영/첨부", type=["png", "jpg", "jpeg"])
 
 if st.session_state.edit_mode:
@@ -101,3 +105,24 @@ for _, row in df.iterrows():
                 delete_data(row['id'])
                 st.rerun()
     st.write("---")
+
+# --- 4. 하단 다운로드 및 리셋 ---
+st.markdown("##### 💾 백업 및 리셋")
+col_d1, col_d2 = st.columns(2)
+
+with col_d1:
+    if not df.empty:
+        towrite = io.BytesIO()
+        df.to_excel(towrite, index=False, engine="openpyxl")
+        towrite.seek(0)
+        st.download_button("📈 일반 저장", towrite, "KOSTAL_list.xlsx", use_container_width=True)
+
+with col_d2:
+    if os.path.exists("KOSTAL_photo_registry.xlsx"):
+        with open("KOSTAL_photo_registry.xlsx", "rb") as f:
+            st.download_button("📸 사진 저장", f, "KOSTAL_photo_registry.xlsx", use_container_width=True)
+
+if st.button("🚨 전체 마감 리셋", use_container_width=True):
+    clear_data()
+    if os.path.exists("KOSTAL_photo_registry.xlsx"): os.remove("KOSTAL_photo_registry.xlsx")
+    st.rerun()
