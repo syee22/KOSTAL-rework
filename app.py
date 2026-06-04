@@ -175,7 +175,6 @@ if st.session_state.edit_mode:
 else:
     st.markdown("##### ✍️ 실시간 현장 등록")
 
-# 💡 [보정 포인트] 이름 입력창에서 '부서' 문구를 전면 제거하여 단순화
 author = st.text_input("👤 이름", value=st.session_state.form_author, autocomplete="name", placeholder="이름 입력")
 item_name = st.text_input("📦 VIN 6자리", value=st.session_state.form_item_name, max_chars=6, placeholder="123456")
 
@@ -260,11 +259,16 @@ if not df.empty:
     else:
         for index, row in filtered_df.iterrows():
             with st.container(border=False):
-                st.markdown(f"**📦 {row['item_name']}** ({row['author']}) / 🕒 {row['timestamp']}")
-                st.caption(f"업뎃: {row['is_update']} | DTC: {row['is_dtc']}")
+                # 💡 [버튼 위치 조정] 시간 옆에 버튼 배치
+                col_info1, col_info2 = st.columns([3, 1])
+                with col_info1:
+                    st.markdown(f"**📦 {row['item_name']}** ({row['author']})")
+                with col_info2:
+                    st.write(f"🕒 {row['timestamp']}")
                 
-                col_b1, col_b2, col_b3 = st.columns([1, 1, 8])
-                with col_b1:
+                # 버튼 레이아웃
+                col_btn1, col_btn2, col_btn3 = st.columns([1, 1, 8])
+                with col_btn1:
                     if st.button("📝", key=f"m_edit_{row['id']}"):
                         st.session_state.edit_mode = True
                         st.session_state.edit_id = row['id']
@@ -273,9 +277,11 @@ if not df.empty:
                         st.session_state.form_update = True if row['is_update'] == "Y" else False
                         st.session_state.form_dtc = True if row['is_dtc'] == "Y" else False
                         st.rerun()
-                with col_b2:
+                with col_btn2:
                     if st.button("🗑️", key=f"m_del_{row['id']}"):
                         confirm_delete_dialog(row['id'], row['item_name'])
+                
+                st.caption(f"업데이트: {row['is_update']} | DTC: {row['is_dtc']}")
                 st.write(" ") 
 else:
     st.info("등록된 내역이 없습니다.")
