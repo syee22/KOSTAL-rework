@@ -31,7 +31,7 @@ if "next_vin" not in st.session_state: st.session_state.next_vin = ""
 if "next_upd" not in st.session_state: st.session_state.next_upd = False
 if "next_dtc" not in st.session_state: st.session_state.next_dtc = False
 
-# --- 수정/삭제 요청 처리 (URL 파라미터 기반) ---
+# --- 수정/삭제 요청 처리 ---
 query_params = st.query_params
 if "del" in query_params:
     del_id = int(query_params["del"][0])
@@ -87,8 +87,10 @@ with t_col:
 with b_col1:
     df_ex = df.copy()
     df_ex['순번'] = range(1, len(df)+1)
+    df_ex = df_ex[['순번', 'timestamp', 'author', 'item_name', 'is_update', 'is_dtc']]
+    df_ex.columns = ['순번', '시간', '이름', 'VIN', '업데이트', 'DTC'] # 컬럼명 수정 적용
     towrite = io.BytesIO()
-    df_ex[['순번', 'timestamp', 'author', 'item_name', 'is_update', 'is_dtc']].to_excel(towrite, index=False)
+    df_ex.to_excel(towrite, index=False)
     st.download_button("📥 VIN 현황 저장", towrite.getvalue(), "list.xlsx", use_container_width=True)
 
 with b_col2:
@@ -105,7 +107,7 @@ with b_col2:
 
     st.download_button("📥 상세 사진 다운로드", data=create_photos_excel(), file_name="photos.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True)
 
-# 리스트 표시 (텍스트 링크로 가로 정렬)
+# 리스트 표시
 for row in df.itertuples():
     st.markdown(
         f"<small>{row.timestamp} | **{row.item_name}** | {row.author}<br>"
