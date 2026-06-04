@@ -34,6 +34,7 @@ def delete_data(id):
 st.set_page_config(page_title="KOSTAL Mobile", layout="centered")
 st.markdown("#### 📱 KOSTAL 리워크 현황")
 
+# 세션 상태 초기화
 if "edit_id" not in st.session_state: st.session_state.edit_id = None
 if "current_author" not in st.session_state: st.session_state.current_author = ""
 
@@ -52,6 +53,7 @@ with st.form("entry_form", clear_on_submit=False):
         else:
             insert_data(author, item_name, "Y" if chk_u else "N", "Y" if chk_d else "N")
         
+        # 이름 제외한 나머지 항목 리셋
         st.session_state.edit_id = None
         st.session_state.next_vin = ""
         st.session_state.next_upd = False
@@ -60,19 +62,23 @@ with st.form("entry_form", clear_on_submit=False):
 
 st.write("---")
 
-# 검색 및 데이터 로드
+# 데이터 로드 및 검색
 df_all = pd.read_sql_query("SELECT * FROM items ORDER BY id DESC", conn)
-search = st.text_input(f"🔍 이름 또는 VIN 검색 ({len(df_all if not search else df_all[df_all['item_name'].str.contains(search, na=False) | df_all['author'].str.contains(search, na=False)])}건)")
+search = st.text_input("🔍 이름 또는 VIN 검색")
 
 if search:
     df = df_all[df_all['item_name'].str.contains(search, na=False) | df_all['author'].str.contains(search, na=False)]
 else:
     df = df_all
 
-# 통계 및 리스트 표시
+# 검색 결과 개수 표시
+st.markdown(f"**검색 결과: {len(df)}건**")
+
+# 통계 계산
 u_cnt = len(df[df['is_update'] == 'Y'])
 d_cnt = len(df[df['is_dtc'] == 'Y'])
 
+# 등록 현황 및 엑셀 저장
 t_col, b_col = st.columns([6, 4])
 with t_col:
     st.markdown(f"##### 📋 등록 현황 <span style='color:black;'>{len(df)}건</span> <span style='color:blue; font-size:12px;'>| 업뎃:{u_cnt} | DTC:{d_cnt}</span>", unsafe_allow_html=True)
