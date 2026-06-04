@@ -37,24 +37,27 @@ st.markdown("#### 📱 KOSTAL 리워크 현황")
 # 세션 상태 초기화
 if "edit_id" not in st.session_state: st.session_state.edit_id = None
 if "current_author" not in st.session_state: st.session_state.current_author = ""
+if "edit_item" not in st.session_state: st.session_state.edit_item = ""
+if "edit_upd" not in st.session_state: st.session_state.edit_upd = False
+if "edit_dtc" not in st.session_state: st.session_state.edit_dtc = False
 
 # 입력 폼
-with st.form("entry_form"):
+with st.form("entry_form", clear_on_submit=False):
     author = st.text_input("이름", value=st.session_state.current_author)
-    item_name = st.text_input("VIN 6자리", value=st.session_state.get("edit_item", ""), max_chars=6)
+    item_name = st.text_input("VIN 6자리", value=st.session_state.edit_item, max_chars=6, key="vin_input")
     c1, c2 = st.columns(2)
-    chk_u = c1.checkbox("업데이트", value=st.session_state.get("edit_upd", False))
-    chk_d = c2.checkbox("DTC", value=st.session_state.get("edit_dtc", False))
+    chk_u = c1.checkbox("업데이트", value=st.session_state.edit_upd, key="upd_check")
+    chk_d = c2.checkbox("DTC", value=st.session_state.edit_dtc, key="dtc_check")
     
     if st.form_submit_button("🚀 등록 / ✅ 수정 완료"):
-        st.session_state.current_author = author # 이름 저장
+        st.session_state.current_author = author # 이름은 유지
         
         if st.session_state.edit_id:
             update_data(st.session_state.edit_id, author, item_name, "Y" if chk_u else "N", "Y" if chk_d else "N")
         else:
             insert_data(author, item_name, "Y" if chk_u else "N", "Y" if chk_d else "N")
         
-        # 이름 외 항목만 명확하게 리셋
+        # 이름 제외한 나머지 리셋
         st.session_state.edit_id = None
         st.session_state.edit_item = ""
         st.session_state.edit_upd = False
@@ -63,12 +66,13 @@ with st.form("entry_form"):
 
 st.write("---")
 
-# 검색 및 리스트
+# 검색 및 데이터 로드
 df = pd.read_sql_query("SELECT * FROM items ORDER BY id DESC", conn)
 search = st.text_input("🔍 이름 또는 VIN 검색")
 if search:
     df = df[df['item_name'].str.contains(search, na=False) | df['author'].str.contains(search, na=False)]
 
+# 통계 및 리스트 표시
 u_cnt = len(df[df['is_update'] == 'Y'])
 d_cnt = len(df[df['is_dtc'] == 'Y'])
 
