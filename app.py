@@ -5,6 +5,7 @@ import pytz
 from datetime import datetime
 import db_manager
 
+# DB 연결
 conn = db_manager.init_db()
 
 # --- 함수 ---
@@ -19,49 +20,74 @@ def update_data(id, a, i, u, d):
     conn.execute("UPDATE items SET timestamp=?, author=?, item_name=?, is_update=?, is_dtc=? WHERE id=?", (get_current_kst_time(), a, i, u, d, id))
     conn.commit()
 
-def delete_data(id):
-    vin = conn.execute("SELECT item_name FROM items WHERE id = ?", (id,)).fetchone()
-    if vin:
-        db_manager.delete_photos_by_vin(conn, vin[0])
-    conn.execute("DELETE FROM items WHERE id = ?", (id,))
-    conn.commit()
-
-# --- UI ---
+# --- UI 설정 ---
 st.set_page_config(page_title="KOSTAL Mobile", layout="centered")
 st.markdown("#### 📱 KOSTAL 리워크 현황")
 
+# 세션 상태 초기화
+if "edit_id" not in st.session_state: st.session_state.edit_id = None
+if "current_author" not in st.session_state: st.session_state.current_author = ""
+if "next_vin" not in st.session_state: st.session_state.next_vin = ""
+if "next_upd" not in st.session_state: st.session_state.next_upd = False
+if "next_dtc" not in st.session_state: st.session_state.next_dtc = False
+
 # 입력 폼
 with st.form("entry_form", clear_on_submit=False):
-    author = st.text_input("이름")
-    item_name = st.text_input("VIN 6자리", max_chars=6)
+    author = st.text_input("이름", value=st.session_state.current_author)
+    item_name = st.text_input("VIN 6자리", value=st.session_state.next_vin, max_chars=6)
     photo_files = st.file_uploader("검사 사진 업로드 (최대 4개)", type=['jpg', 'jpeg', 'png'], accept_multiple_files=True)
     c1, c2 = st.columns(2)
-    chk_u, chk_d = c1.checkbox("업데이트"), c2.checkbox("DTC")
+    chk_u = c1.checkbox("업데이트", value=st.session_state.next_upd)
+    chk_d = c2.checkbox("DTC", value=st.session_state.next_dtc)
     
-    if st.form_submit_button("🚀 등록"):
+    if st.form_submit_button("🚀 등록 / ✅ 수정 완료"):
         if item_name:
             if photo_files:
                 db_manager.save_photos_to_db(conn, item_name, photo_files)
-            insert_data(author, item_name, "Y" if chk_u else "N", "Y" if chk_d else "N")
-            st.rerun()
-
-# 엑셀 저장
-df = pd.read_sql_query("SELECT * FROM items ORDER BY id DESC", conn)
-if not df.empty:
-    towrite = io.BytesIO()
-    with pd.ExcelWriter(towrite, engine='xlsxwriter') as writer:
-        # 1. 메인 리스트 시트
-        df[['timestamp', 'author', 'item_name', 'is_update', 'is_dtc']].to_excel(writer, sheet_name='리워크현황', index=False)
+            if st.session_state.edit_id:
+                update_data(st.session_state.edit_id, author, item_name, "Y" if chk_u else "N", "Y" if chk_d else "N")
+            else:
+                insert_data(author, item_name, "Y" if chk_u else "N", "Y" if chk_d else "N")
         
-        # 2. 각 VIN 시트 생성 및 사진 배치
-        for vin in df['item_name'].unique():
-            photos = db_manager.get_photos_by_vin(conn, vin)
-            if photos:
-                sheet = writer.book.add_worksheet(name=str(vin))
-                for idx, (img_data,) in enumerate(photos):
-                    # B2, L2, V2, AF2 순으로 사진 배치
-                    sheet.insert_image(chr(66 + (idx * 10)) + '2', 'photo.png', {'image_data': img_data, 'x_scale': 0.3, 'y_scale': 0.3})
-    
-    st.download_button("📥 엑셀(사진포함) 저장", towrite.getvalue(), "list_with_photos.xlsx", use_container_width=True)
+        st.session_state.update({"edit_id": None, "next_vin": "", "next_upd": False, "next_dtc": False})
+        st.rerun()
 
-# 리스트 표시 로직... (이전과 동일하게 유지)
+st.write("---")
+
+# 검색 및 데이터 로드
+df_all = pd.read_sql_query("SELECT * FROM items ORDER BY id DESC", conn)
+search = st.text_input("🔍 이름 또는 VIN 검색")
+df = df_all[df_all['item_name'].str.contains(search, na=False) | df_all['author'].str.contains(search, na=False)] if search else df_all
+
+# 등록 현황 및 버튼 분리
+t_col, b_col1, b_col2 = st.columns([4, 3, 3])
+with t_col:
+    st.markdown(f"##### 📋 {len(df)}건 | <small>업뎃:{len(df[df['is_update'] == 'Y'])} | DTC:{len(df[df['is_dtc'] == 'Y'])}</small>", unsafe_allow_html=True)
+
+with b_col1: # 기존 텍스트 리스트 저장
+    towrite = io.BytesIO()
+    df[['timestamp', 'author', 'item_name', 'is_update', 'is_dtc']].to_excel(towrite, index=False)
+    st.download_button("📥 리스트 저장", towrite.getvalue(), "list.xlsx", use_container_width=True)
+
+with b_col2: # 사진 데이터만 별도 시트 저장
+    if st.button("📥 사진 데이터 다운로드", use_container_width=True):
+        towrite_p = io.BytesIO()
+        with pd.ExcelWriter(towrite_p, engine='xlsxwriter') as writer:
+            for vin in df['item_name'].unique():
+                photos = db_manager.get_photos_by_vin(conn, vin)
+                if photos:
+                    sheet = writer.book.add_worksheet(name=str(vin))
+                    for idx, (img_data,) in enumerate(photos):
+                        sheet.insert_image(chr(66 + (idx * 10)) + '2', 'photo.png', {'image_data': img_data, 'x_scale': 0.3, 'y_scale': 0.3})
+        st.download_button("📥 사진 저장 준비 완료", towrite_p.getvalue(), "photos.xlsx", use_container_width=True)
+
+# 리스트 표시
+for row in df.itertuples():
+    cols = st.columns([6, 2, 2])
+    cols[0].markdown(f"<small>{row.timestamp} | **{row.item_name}** | {row.author}</small>", unsafe_allow_html=True)
+    if cols[1].button("수정", key=f"e{row.id}"):
+        st.session_state.update({"edit_id": row.id, "current_author": row.author, "next_vin": row.item_name, "next_upd": (row.is_update=='Y'), "next_dtc": (row.is_dtc=='Y')})
+        st.rerun()
+    if cols[2].button("삭제", key=f"d{row.id}"):
+        db_manager.delete_all_data_by_vin(conn, row.id, row.item_name)
+        st.rerun()
