@@ -56,7 +56,7 @@ def clear_data():
 
 # --- 3. UI 및 상태 관리 ---
 st.set_page_config(page_title="KOSTAL Mobile", layout="centered")
-st.markdown("#### 📱 KOSTAL 시스템")
+st.markdown("#### 📱 KOSTAL 리워크 등록")
 
 if "edit_mode" not in st.session_state: st.session_state.edit_mode = False
 
