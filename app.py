@@ -3,7 +3,7 @@ import pandas as pd
 import io
 import pytz
 from datetime import datetime
-import db_manager
+import db_manager  # 같은 폴더에 db_manager.py가 있어야 합니다.
 
 # DB 연결
 conn = db_manager.init_db()
@@ -49,7 +49,7 @@ with st.form("entry_form", clear_on_submit=False):
             else:
                 insert_data(author, item_name, "Y" if chk_u else "N", "Y" if chk_d else "N")
         
-        st.session_state.update({"edit_id": None, "next_vin": "", "next_upd": False, "next_dtc": False})
+        st.session_state.update({"edit_id": None, "current_author": author, "next_vin": "", "next_upd": False, "next_dtc": False})
         st.rerun()
 
 st.write("---")
@@ -59,15 +59,21 @@ df_all = pd.read_sql_query("SELECT * FROM items ORDER BY id DESC", conn)
 search = st.text_input("🔍 이름 또는 VIN 검색")
 df = df_all[df_all['item_name'].str.contains(search, na=False) | df_all['author'].str.contains(search, na=False)] if search else df_all
 
-# 등록 현황 및 버튼 영역
+# 등록 현황 및 다운로드 버튼 영역
 t_col, b_col1, b_col2 = st.columns([4, 3, 3])
 with t_col:
-    st.markdown(f"##### 📋 {len(df)}건 <small>| 업뎃:{len(df[df['is_update'] == 'Y'])} | DTC:{len(df[df['is_dtc'] == 'Y'])}</small>", unsafe_allow_html=True)
+    st.markdown(f"##### 📋 {len(df)}건", unsafe_allow_html=True)
 
 with b_col1:
+    # VIN 현황 저장 (이전과 동일한 양식)
+    df_ex = df.copy()
+    df_ex['순번'] = range(1, len(df) + 1)
+    df_ex = df_ex[['순번', 'timestamp', 'author', 'item_name', 'is_update', 'is_dtc']]
+    df_ex.columns = ['순번', '시간', '이름', 'VIN 번호', '업데이트', 'DTC']
+    
     towrite = io.BytesIO()
-    df[['timestamp', 'author', 'item_name', 'is_update', 'is_dtc']].to_excel(towrite, index=False)
-    st.download_button("📥 리스트 저장", towrite.getvalue(), "list.xlsx", use_container_width=True)
+    df_ex.to_excel(towrite, index=False)
+    st.download_button("📥 VIN 현황 저장", towrite.getvalue(), "list.xlsx", use_container_width=True)
 
 with b_col2:
     if st.button("📥 사진 데이터 준비", use_container_width=True):
