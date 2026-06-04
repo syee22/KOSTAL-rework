@@ -34,30 +34,25 @@ def delete_data(id):
 st.set_page_config(page_title="KOSTAL Mobile", layout="centered")
 st.markdown("#### 📱 KOSTAL 리워크 현황")
 
-# 세션 상태 초기화 (이름은 유지하되 나머지는 초기화 목적)
+# 세션 상태 초기화
 if "edit_id" not in st.session_state: st.session_state.edit_id = None
 if "current_author" not in st.session_state: st.session_state.current_author = ""
 
 # 입력 폼
 with st.form("entry_form", clear_on_submit=False):
-    # 이름은 세션값을 유지
     author = st.text_input("이름", value=st.session_state.current_author)
-    
-    # VIN과 체크박스는 초기화될 수 있도록 값을 명시적 할당
     item_name = st.text_input("VIN 6자리", value=st.session_state.get("next_vin", ""), max_chars=6)
     c1, c2 = st.columns(2)
     chk_u = c1.checkbox("업데이트", value=st.session_state.get("next_upd", False))
     chk_d = c2.checkbox("DTC", value=st.session_state.get("next_dtc", False))
     
     if st.form_submit_button("🚀 등록 / ✅ 수정 완료"):
-        st.session_state.current_author = author # 이름은 계속 유지
-        
+        st.session_state.current_author = author
         if st.session_state.edit_id:
             update_data(st.session_state.edit_id, author, item_name, "Y" if chk_u else "N", "Y" if chk_d else "N")
         else:
             insert_data(author, item_name, "Y" if chk_u else "N", "Y" if chk_d else "N")
         
-        # 이름 제외한 나머지 항목 강제 리셋
         st.session_state.edit_id = None
         st.session_state.next_vin = ""
         st.session_state.next_upd = False
@@ -75,7 +70,6 @@ if search:
 u_cnt = len(df[df['is_update'] == 'Y'])
 d_cnt = len(df[df['is_dtc'] == 'Y'])
 
-# 상단 타이틀 + 엑셀 버튼
 t_col, b_col = st.columns([6, 4])
 with t_col:
     st.markdown(f"##### 📋 리스트 <span style='color:red;'>({len(df)})</span> <span style='color:blue; font-size:12px;'>| 업뎃:{u_cnt} | DTC:{d_cnt}</span>", unsafe_allow_html=True)
@@ -91,7 +85,9 @@ with b_col:
 for row in df.itertuples():
     cols = st.columns([6, 2, 2])
     with cols[0]:
-        st.markdown(f"<small>{row.timestamp} | **{row.item_name}** | {row.author}</small>", unsafe_allow_html=True)
+        # 업데이트(U), DTC(D) 여부를 이름 옆에 짧게 표시
+        info_text = f"<small>{row.timestamp} | **{row.item_name}** | {row.author} | <span style='color:gray;'>U:{row.is_update} D:{row.is_dtc}</span></small>"
+        st.markdown(info_text, unsafe_allow_html=True)
     with cols[1]:
         if st.button("수정", key=f"e{row.id}", use_container_width=True):
             st.session_state.update({"edit_id": row.id, "current_author": row.author, "next_vin": row.item_name, "next_upd": (row.is_update=='Y'), "next_dtc": (row.is_dtc=='Y')})
