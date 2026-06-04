@@ -169,8 +169,8 @@ if "form_dtc" not in st.session_state:
 # --- 7. Streamlit 모바일형 UI 세팅 ---
 st.set_page_config(page_title="KOSTAL Mobile", layout="centered")
 
-st.title("📱 KOSTAL 현장 마감 시스템")
-st.caption("모바일 한 손 조작에 최적화된 인터페이스입니다.")
+st.title("📱 KOSTAL 리워크 등록 시스템")
+st.caption("입력 후 아래 현황 확인 필요")
 st.write("---")
 
 # --- 메인화면 최상단: 데이터 입력/수정 컨트롤 박스 ---
@@ -248,7 +248,7 @@ st.write("---")
 # --- 8. 하단 모바일 특화 카드형 리스트 및 제어부 ---
 df = load_data()
 
-st.markdown("### 📋 마감 데이터 현황")
+st.markdown("### 📋 등록 현황")
 search_query = st.text_input("🔍 VIN 넘버/작성자 검색", "")
 
 if not df.empty:
