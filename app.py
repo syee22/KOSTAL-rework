@@ -62,16 +62,12 @@ st.write("---")
 
 # 검색 및 데이터 로드
 df_all = pd.read_sql_query("SELECT * FROM items ORDER BY id DESC", conn)
+search = st.text_input(f"🔍 이름 또는 VIN 검색 ({len(df_all if not search else df_all[df_all['item_name'].str.contains(search, na=False) | df_all['author'].str.contains(search, na=False)])}건)")
 
-# 검색창 레이아웃 수정
-search = st.text_input("🔍 이름 또는 VIN 검색")
 if search:
     df = df_all[df_all['item_name'].str.contains(search, na=False) | df_all['author'].str.contains(search, na=False)]
 else:
     df = df_all
-
-# 검색창 바로 밑에 텍스트와 개수 표시
-st.markdown(f"**이름 또는 VIN 검색 ({len(df)}건)**")
 
 # 통계 및 리스트 표시
 u_cnt = len(df[df['is_update'] == 'Y'])
