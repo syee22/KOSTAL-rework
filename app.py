@@ -61,18 +61,22 @@ with st.form("entry_form", clear_on_submit=False):
 
 st.write("---")
 
-# 검색 및 리스트
+# 검색 로직
 df = pd.read_sql_query("SELECT * FROM items ORDER BY id DESC", conn)
 search = st.text_input("🔍 이름 또는 VIN 검색")
 if search:
     df = df[df['item_name'].str.contains(search, na=False) | df['author'].str.contains(search, na=False)]
 
+# 검색 결과 갯수 실시간 표시 (검색창 아래 배치)
+st.markdown(f"**검색 결과: {len(df)}건**")
+
+# 통계 및 리스트
 u_cnt = len(df[df['is_update'] == 'Y'])
 d_cnt = len(df[df['is_dtc'] == 'Y'])
 
 t_col, b_col = st.columns([6, 4])
 with t_col:
-    st.markdown(f"##### 📋 리스트 <span style='color:red;'>({len(df)})</span> <span style='color:blue; font-size:12px;'>| 업뎃:{u_cnt} | DTC:{d_cnt}</span>", unsafe_allow_html=True)
+    st.markdown(f"##### 📋 리스트 <span style='color:blue; font-size:12px;'>| 업뎃:{u_cnt} | DTC:{d_cnt}</span>", unsafe_allow_html=True)
 with b_col:
     if not df.empty:
         df_ex = df.copy()
@@ -85,7 +89,6 @@ with b_col:
 for row in df.itertuples():
     cols = st.columns([6, 2, 2])
     with cols[0]:
-        # UPDATE/DTC로 명칭 변경 및 가독성 향상
         info_text = f"<small>{row.timestamp} | **{row.item_name}** | {row.author}<br>UPDATE:{row.is_update} / DTC:{row.is_dtc}</small>"
         st.markdown(info_text, unsafe_allow_html=True)
     with cols[1]:
