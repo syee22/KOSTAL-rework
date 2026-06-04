@@ -3,8 +3,7 @@ import sqlite3
 def init_db():
     conn = sqlite3.connect("kostal_rework_v3.db", check_same_thread=False)
     conn.execute("CREATE TABLE IF NOT EXISTS items (id INTEGER PRIMARY KEY AUTOINCREMENT, timestamp TEXT, author TEXT, item_name TEXT, is_update TEXT, is_dtc TEXT)")
-    conn.execute("DROP TABLE IF EXISTS photos")
-    conn.execute("CREATE TABLE photos (vin TEXT, seq INTEGER, image_data BLOB, PRIMARY KEY (vin, seq))")
+    conn.execute("CREATE TABLE IF NOT EXISTS photos (vin TEXT, seq INTEGER, image_data BLOB, PRIMARY KEY (vin, seq))")
     conn.commit()
     return conn
 
