@@ -34,20 +34,28 @@ def delete_data(id):
 st.set_page_config(page_title="KOSTAL Mobile", layout="centered")
 st.markdown("#### 📱 KOSTAL 리워크 현황")
 
+# 수정 모드 상태 초기화
 if "edit_id" not in st.session_state: st.session_state.edit_id = None
 
+# 입력 폼
 with st.form("entry_form"):
     author = st.text_input("이름", value=st.session_state.get("edit_author", ""))
     item_name = st.text_input("VIN 6자리", value=st.session_state.get("edit_item", ""), max_chars=6)
     c1, c2 = st.columns(2)
     chk_u = c1.checkbox("업데이트", value=st.session_state.get("edit_upd", False))
     chk_d = c2.checkbox("DTC", value=st.session_state.get("edit_dtc", False))
+    
     if st.form_submit_button("🚀 등록 / ✅ 수정 완료"):
         if st.session_state.edit_id:
             update_data(st.session_state.edit_id, author, item_name, "Y" if chk_u else "N", "Y" if chk_d else "N")
-            st.session_state.edit_id = None
         else:
             insert_data(author, item_name, "Y" if chk_u else "N", "Y" if chk_d else "N")
+        
+        # 💡 [핵심] 등록/수정 후 입력값 리셋
+        st.session_state.update({
+            "edit_id": None, "edit_author": "", "edit_item": "", 
+            "edit_upd": False, "edit_dtc": False
+        })
         st.rerun()
 
 st.write("---")
