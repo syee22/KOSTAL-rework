@@ -85,8 +85,8 @@ with b_col:
 for row in df.itertuples():
     cols = st.columns([6, 2, 2])
     with cols[0]:
-        # 업데이트(U), DTC(D) 여부를 이름 옆에 짧게 표시
-        info_text = f"<small>{row.timestamp} | **{row.item_name}** | {row.author} | <span style='color:gray;'>U:{row.is_update} D:{row.is_dtc}</span></small>"
+        # UPDATE/DTC로 명칭 변경 및 가독성 향상
+        info_text = f"<small>{row.timestamp} | **{row.item_name}** | {row.author}<br>UPDATE:{row.is_update} / DTC:{row.is_dtc}</small>"
         st.markdown(info_text, unsafe_allow_html=True)
     with cols[1]:
         if st.button("수정", key=f"e{row.id}", use_container_width=True):
