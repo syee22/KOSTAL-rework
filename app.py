@@ -9,15 +9,15 @@ import db_manager
 st.set_page_config(page_title="KOSTAL Mobile", layout="centered")
 st.markdown("""
     <style>
-    /* 버튼을 텍스트 링크처럼 보이게 (박스 테두리 제거 및 한 줄 정렬) */
+    /* 버튼을 텍스트 옆에 한 줄로 붙이기 위한 스타일 */
+    .row-widget.stButton { display: inline-block; margin-left: 5px; }
     div.stButton > button { 
         padding: 0px 5px !important; 
         font-size: 11px !important; 
-        height: 25px !important; 
+        height: 22px !important; 
         border: none !important; 
         background: none !important; 
         color: blue !important; 
-        margin: 0px !important;
     }
     div.stButton > button:hover { text-decoration: underline; }
     </style>
@@ -63,7 +63,7 @@ with st.form("entry_form", clear_on_submit=False):
 
 st.write("---")
 
-# 5. 데이터 리스트 및 통계
+# 5. 리스트 및 통계
 df = pd.read_sql_query("SELECT * FROM items ORDER BY id DESC", conn)
 search = st.text_input("🔍 이름 또는 VIN 검색")
 if search: df = df[df['item_name'].str.contains(search, na=False) | df['author'].str.contains(search, na=False)]
@@ -97,14 +97,17 @@ with b_col2:
     
     st.download_button("📥 상세 사진 다운로드", data=create_photos_excel(), file_name="photos.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True)
 
-# 6. 리스트 표시 (모바일 최적화)
+# 6. 리스트 표시 (텍스트 바로 옆에 버튼 배치)
 for row in df.itertuples():
-    c_list = st.columns([6, 1, 1])
-    c_list[0].markdown(f"<small>{row.timestamp} | **{row.item_name}** | {row.author} (UP:{row.is_update}/DTC:{row.is_dtc})</small>", unsafe_allow_html=True)
+    # 텍스트와 버튼을 포함하는 한 줄 구성
+    col_text, col_btn = st.columns([8, 2])
+    col_text.markdown(f"<small>{row.timestamp} | **{row.item_name}** | {row.author} (UP:{row.is_update}/DTC:{row.is_dtc})</small>", unsafe_allow_html=True)
     
-    if c_list[1].button("수정", key=f"e{row.id}"):
+    # 버튼 영역을 한 줄로 구성
+    sub_col1, sub_col2 = col_btn.columns(2)
+    if sub_col1.button("수정", key=f"e{row.id}"):
         st.session_state.update({"edit_id": row.id, "current_author": row.author, "next_vin": row.item_name, "next_upd": (row.is_update=='Y'), "next_dtc": (row.is_dtc=='Y')})
         st.rerun()
-    if c_list[2].button("삭제", key=f"d{row.id}"):
+    if sub_col2.button("삭제", key=f"d{row.id}"):
         db_manager.delete_all_data_by_vin(conn, row.id, row.item_name)
         st.rerun()
