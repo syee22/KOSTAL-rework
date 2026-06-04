@@ -61,14 +61,22 @@ with st.form("entry_form", clear_on_submit=False):
 
 st.write("---")
 
-# 검색 로직
-df = pd.read_sql_query("SELECT * FROM items ORDER BY id DESC", conn)
-search = st.text_input("🔍 이름 또는 VIN 검색")
-if search:
-    df = df[df['item_name'].str.contains(search, na=False) | df['author'].str.contains(search, na=False)]
+# 검색 및 데이터 로드
+df_all = pd.read_sql_query("SELECT * FROM items ORDER BY id DESC", conn)
 
-# 검색 결과 갯수 실시간 표시 (검색창 아래 배치)
-st.markdown(f"**검색 결과: {len(df)}건**")
+# 검색창과 결과 개수를 나란히 배치
+s_col, n_col = st.columns([3, 1])
+with s_col:
+    search = st.text_input("🔍 이름 또는 VIN 검색")
+with n_col:
+    # 줄 맞춤을 위한 마진 추가
+    st.markdown("<br>", unsafe_allow_html=True)
+    
+    if search:
+        df = df_all[df_all['item_name'].str.contains(search, na=False) | df_all['author'].str.contains(search, na=False)]
+    else:
+        df = df_all
+    st.markdown(f"**{len(df)}건**")
 
 # 통계 및 리스트
 u_cnt = len(df[df['is_update'] == 'Y'])
