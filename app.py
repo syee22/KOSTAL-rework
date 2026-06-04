@@ -34,7 +34,6 @@ def delete_data(id):
 st.set_page_config(page_title="KOSTAL Mobile", layout="centered")
 st.markdown("#### 📱 KOSTAL 리워크 현황")
 
-# 세션 상태 초기화
 if "edit_id" not in st.session_state: st.session_state.edit_id = None
 if "current_author" not in st.session_state: st.session_state.current_author = ""
 
@@ -64,17 +63,15 @@ st.write("---")
 # 검색 및 데이터 로드
 df_all = pd.read_sql_query("SELECT * FROM items ORDER BY id DESC", conn)
 
-# 검색창과 결과 개수를 나란히 배치
-s_col, n_col = st.columns([3, 1])
-with s_col:
-    search = st.text_input("🔍 이름 또는 VIN 검색")
-with n_col:
-    st.markdown("<br>", unsafe_allow_html=True)
-    if search:
-        df = df_all[df_all['item_name'].str.contains(search, na=False) | df_all['author'].str.contains(search, na=False)]
-    else:
-        df = df_all
-    st.markdown(f"**{len(df)}건**")
+# 검색창 레이아웃 수정
+search = st.text_input("🔍 이름 또는 VIN 검색")
+if search:
+    df = df_all[df_all['item_name'].str.contains(search, na=False) | df_all['author'].str.contains(search, na=False)]
+else:
+    df = df_all
+
+# 검색창 바로 밑에 텍스트와 개수 표시
+st.markdown(f"**이름 또는 VIN 검색 ({len(df)}건)**")
 
 # 통계 및 리스트 표시
 u_cnt = len(df[df['is_update'] == 'Y'])
@@ -82,7 +79,6 @@ d_cnt = len(df[df['is_dtc'] == 'Y'])
 
 t_col, b_col = st.columns([6, 4])
 with t_col:
-    # 텍스트 변경 및 통계 표시 순서 조정
     st.markdown(f"##### 📋 등록 현황 <span style='color:black;'>{len(df)}건</span> <span style='color:blue; font-size:12px;'>| 업뎃:{u_cnt} | DTC:{d_cnt}</span>", unsafe_allow_html=True)
 with b_col:
     if not df.empty:
