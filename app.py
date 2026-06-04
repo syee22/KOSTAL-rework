@@ -10,8 +10,12 @@ def init_db():
     conn = sqlite3.connect("kostal_rework_v3.db", check_same_thread=False)
     # 리워크 데이터 테이블
     conn.execute("CREATE TABLE IF NOT EXISTS items (id INTEGER PRIMARY KEY AUTOINCREMENT, timestamp TEXT, author TEXT, item_name TEXT, is_update TEXT, is_dtc TEXT)")
-    # 사진 저장용 테이블 (VIN별, 순번별 저장 - 복합 기본키 사용)
-    conn.execute("CREATE TABLE IF NOT EXISTS photos (vin TEXT, seq INTEGER, image_data BLOB, PRIMARY KEY (vin, seq))")
+    
+    # 사진 저장용 테이블 (초기화 로직 포함: 구조 변경 시 오류 방지)
+    # 기존 테이블이 있다면 삭제하고 새로 생성하여 제약조건 충돌 방지
+    conn.execute("DROP TABLE IF EXISTS photos")
+    conn.execute("CREATE TABLE photos (vin TEXT, seq INTEGER, image_data BLOB, PRIMARY KEY (vin, seq))")
+    
     conn.commit()
     return conn
 
@@ -30,7 +34,6 @@ def update_data(id, a, i, u, d):
     conn.commit()
 
 def delete_data(id):
-    # 아이템 삭제 시 해당 VIN의 사진도 함께 삭제
     vin = conn.execute("SELECT item_name FROM items WHERE id = ?", (id,)).fetchone()
     if vin:
         conn.execute("DELETE FROM photos WHERE vin = ?", (vin[0],))
@@ -38,6 +41,7 @@ def delete_data(id):
     conn.commit()
 
 def save_photos(vin, files):
+    # 해당 VIN의 기존 사진 삭제 후 재등록
     conn.execute("DELETE FROM photos WHERE vin = ?", (vin,))
     for idx, file in enumerate(files[:4]): # 최대 4개까지만 저장
         conn.execute("INSERT INTO photos (vin, seq, image_data) VALUES (?, ?, ?)", (vin, idx, file.getvalue()))
@@ -109,7 +113,7 @@ with b_col:
                 if photos:
                     sheet = writer.book.add_worksheet(name=str(vin))
                     for idx, (img_data,) in enumerate(photos):
-                        # B2, L2, V2, AF2 순으로 사진 배치
+                        # B2(idx=0), L2(idx=1), V2(idx=2), AF2(idx=3) 순으로 사진 배치
                         cell_loc = chr(66 + (idx * 10)) + '2' 
                         sheet.insert_image(cell_loc, 'photo.png', {'image_data': img_data, 'x_scale': 0.3, 'y_scale': 0.3})
         
