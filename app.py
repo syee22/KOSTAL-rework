@@ -8,8 +8,9 @@ from datetime import datetime
 # --- 1. DB 설정 ---
 def init_db():
     conn = sqlite3.connect("kostal_rework_v3.db", check_same_thread=False)
+    # 리워크 데이터 테이블
     conn.execute("CREATE TABLE IF NOT EXISTS items (id INTEGER PRIMARY KEY AUTOINCREMENT, timestamp TEXT, author TEXT, item_name TEXT, is_update TEXT, is_dtc TEXT)")
-    # 사진 저장용 테이블 (VIN별, 순번별 저장)
+    # 사진 저장용 테이블 (VIN별, 순번별 저장 - 복합 기본키 사용)
     conn.execute("CREATE TABLE IF NOT EXISTS photos (vin TEXT, seq INTEGER, image_data BLOB, PRIMARY KEY (vin, seq))")
     conn.commit()
     return conn
@@ -29,11 +30,14 @@ def update_data(id, a, i, u, d):
     conn.commit()
 
 def delete_data(id):
+    # 아이템 삭제 시 해당 VIN의 사진도 함께 삭제
+    vin = conn.execute("SELECT item_name FROM items WHERE id = ?", (id,)).fetchone()
+    if vin:
+        conn.execute("DELETE FROM photos WHERE vin = ?", (vin[0],))
     conn.execute("DELETE FROM items WHERE id = ?", (id,))
     conn.commit()
 
 def save_photos(vin, files):
-    # 해당 VIN의 기존 사진 삭제 후 재등록
     conn.execute("DELETE FROM photos WHERE vin = ?", (vin,))
     for idx, file in enumerate(files[:4]): # 최대 4개까지만 저장
         conn.execute("INSERT INTO photos (vin, seq, image_data) VALUES (?, ?, ?)", (vin, idx, file.getvalue()))
@@ -54,7 +58,6 @@ if "next_dtc" not in st.session_state: st.session_state.next_dtc = False
 with st.form("entry_form", clear_on_submit=False):
     author = st.text_input("이름", value=st.session_state.current_author)
     item_name = st.text_input("VIN 6자리", value=st.session_state.next_vin, max_chars=6)
-    # 다중 파일 업로드 (최대 4개)
     photo_files = st.file_uploader("검사 사진 업로드 (최대 4개)", type=['jpg', 'jpeg', 'png'], accept_multiple_files=True)
     c1, c2 = st.columns(2)
     chk_u = c1.checkbox("업데이트", value=st.session_state.next_upd)
@@ -106,9 +109,9 @@ with b_col:
                 if photos:
                     sheet = writer.book.add_worksheet(name=str(vin))
                     for idx, (img_data,) in enumerate(photos):
-                        # B2, L2, V2, AF2 위치에 사진 삽입
+                        # B2, L2, V2, AF2 순으로 사진 배치
                         cell_loc = chr(66 + (idx * 10)) + '2' 
-                        sheet.insert_image(cell_loc, 'photo.png', {'image_data': img_data, 'x_scale': 0.5, 'y_scale': 0.5})
+                        sheet.insert_image(cell_loc, 'photo.png', {'image_data': img_data, 'x_scale': 0.3, 'y_scale': 0.3})
         
         st.download_button("📥 엑셀(사진포함) 저장", towrite.getvalue(), "list_with_photos.xlsx", use_container_width=True)
 
