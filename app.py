@@ -11,7 +11,7 @@ from openpyxl.drawing.image import Image as OpenpyxlImage
 
 # --- 1. 데이터베이스 초기화 함수 ---
 def init_db():
-    conn = sqlite3.connect("kostal_rework_v2.db", check_same_thread=False)
+    conn = sqlite3.connect("kostal_rework_v3.db", check_same_thread=False)
     cursor = conn.cursor()
     cursor.execute(
         """
@@ -167,39 +167,40 @@ if "form_dtc" not in st.session_state:
 # --- 7. Streamlit 모바일형 UI 세팅 ---
 st.set_page_config(page_title="KOSTAL Mobile", layout="centered")
 
-# 💡 [교정 포인트] 거대한 st.title 대신 모바일 가독성을 위해 컴팩트한 마크다운 헤더(##)로 축소 적용
-st.markdown("## 📱 KOSTAL 리워크 등록 시스템")
-st.caption("입력 후 아래 현황 확인 필요")
-st.write("---")
+# 💡 [초슬림 포인트 1] 거대한 st.title 대신 아주 작은 마크다운 헤더(####)로 축소 및 여백 제거
+st.markdown("#### 📱 KOSTAL 시스템")
+# 💡 [초슬림 포인트 2] 불필요한 안내 문구와 구분선 제거로 즉시 입력 폼 노출
 
 # --- 메인화면 최상단: 데이터 입력/수정 컨트롤 박스 ---
 if st.session_state.edit_mode:
-    st.warning(f"✏️ 현재 ID [{st.session_state.edit_id}]번 항목을 수정하고 있습니다.")
+    st.warning(f"✏️ ID [{st.session_state.edit_id}] 수정 중")
 else:
-    st.markdown("### ✍️ 실시간 현장 등록")
+    st.markdown("##### ✍️ 실시간 현장 등록")
 
-author = st.text_input("👤 작성자 (이름 / 부서)", value=st.session_state.form_author, autocomplete="name")
-item_name = st.text_input("📦 VIN 넘버 (숫자 6자리 필수 입력)", value=st.session_state.form_item_name, max_chars=6)
+# 💡 [초슬림 포인트 3] 입력창 제목 길이를 최소화하고 autocomplete="name" 속성을 주어 입력 유도
+author = st.text_input("👤 이름/부서", value=st.session_state.form_author, autocomplete="name", placeholder="홍길동/마감")
+item_name = st.text_input("📦 VIN 6자리", value=st.session_state.form_item_name, max_chars=6, placeholder="123456")
 
-st.markdown("**🛠️ 현장 체크 체크사항**")
-col_chk1, col_chk2 = st.columns(2)
+# 💡 [초슬림 포인트 4] 두 줄로 차지하던 체크박스를 세로 공간을 아끼기 위해 가로 세 칸 배치로 압축
+st.markdown("**🛠️ 체크**")
+col_chk1, col_chk2, col_chk3 = st.columns(3)
 with col_chk1:
-    chk_update = st.checkbox("🔄 업데이트 포함", value=st.session_state.form_update)
+    chk_update = st.checkbox("🔄 업뎃", value=st.session_state.form_update)
 with col_chk2:
-    chk_dtc = st.checkbox("⚠️ DTC 확인 완료", value=st.session_state.form_dtc)
+    chk_dtc = st.checkbox("⚠️ DTC", value=st.session_state.form_dtc)
+# col_chk3는 여백용으로 활용하여 촘촘하게 배치
 
 val_update = "Y" if chk_update else "N"
 val_dtc = "Y" if chk_dtc else "N"
 
-uploaded_file = st.file_uploader("📸 현장 증빙 사진 촬영/첨부", type=["png", "jpg", "jpeg"])
+# 📸 카메라 버튼도 간결하게 배치
+uploaded_file = st.file_uploader("📸 현장 사진 촬영/첨부", type=["png", "jpg", "jpeg"])
 
-st.write(" ")
-
-# 입력 및 수정 제출 버튼
+# 입력 및 수정 제출 버튼 (색상으로 강조하여 크기는 슬림하게 유지)
 if st.session_state.edit_mode:
     col_m_btn1, col_m_btn2 = st.columns(2)
     with col_m_btn1:
-        if st.button("✅ 수정 완료", type="primary", use_container_width=True):
+        if st.button("✅ 수정", type="primary", use_container_width=True):
             if author and item_name:
                 if not item_name.isdigit() or len(item_name) != 6:
                     validation_error_dialog(f"형식이 잘못되었습니다.")
@@ -234,21 +235,23 @@ else:
                 insert_data(author, item_name, val_update, val_dtc)
                 if uploaded_file is not None:
                     save_image_to_excel(item_name, val_update, val_dtc, uploaded_file)
-                st.toast("리스트에 추가되었습니다!")
+                st.toast("등록되었습니다!")
                 
                 st.session_state.form_author = author
                 st.session_state.form_item_name = ""
                 st.rerun()
         else:
-            st.error("작성자와 VIN 넘버는 필수 입력 항목입니다.")
+            st.error("작성자와 VIN 넘버는 필수입니다.")
 
 st.write("---")
 
 # --- 8. 하단 모바일 특화 카드형 리스트 및 제어부 ---
 df = load_data()
 
-st.markdown("### 📋 등록 현황")
-search_query = st.text_input("🔍 VIN 넘버/작성자 검색", "")
+# 💡 [초슬림 포인트 5] 하단 현황 제목 크기도 줄임
+st.markdown("##### 📋 마감 현황")
+# 검색창 제목 제거 및 placeholder로 안내
+search_query = st.text_input("", placeholder="🔍 VIN/이름 검색", label_visibility="collapsed")
 
 if not df.empty:
     if search_query:
@@ -262,33 +265,35 @@ if not df.empty:
     if filtered_df.empty:
         st.warning("검색 결과가 없습니다.")
     else:
+        # 💡 [초슬림 포인트 6] 카드형 리스트의 테두리 여백을 더 극소화하여 촘촘하게 정렬
         for index, row in filtered_df.iterrows():
-            with st.container(border=True):
-                col_c1, col_c2 = st.columns([4, 1])
-                with col_c1:
-                    st.markdown(f"**📦 VIN: {row['item_name']}** ({row['author']})")
-                    st.caption(f"🕒 {row['timestamp']} | 업데이트: {row['is_update']} | DTC: {row['is_dtc']}")
-                with col_c2:
-                    col_b1, col_b2 = st.columns(2)
-                    with col_b1:
-                        if st.button("📝", key=f"m_edit_{row['id']}"):
-                            st.session_state.edit_mode = True
-                            st.session_state.edit_id = row['id']
-                            st.session_state.form_author = row['author']
-                            st.session_state.form_item_name = row['item_name']
-                            st.session_state.form_update = True if row['is_update'] == "Y" else False
-                            st.session_state.form_dtc = True if row['is_dtc'] == "Y" else False
-                            st.rerun()
-                    with col_b2:
-                        if st.button("🗑️", key=f"m_del_{row['id']}"):
-                            confirm_delete_dialog(row['id'], row['item_name'])
+            with st.container(border=False): # border를 없애서 부피 극소화
+                st.markdown(f"**📦 {row['item_name']}** ({row['author']}) / 🕒 {row['timestamp']}")
+                st.caption(f"업뎃: {row['is_update']} | DTC: {row['is_dtc']}")
+                
+                # 버튼 세로는 하나로 통합 (📝, 🗑️)
+                col_b1, col_b2, col_b3 = st.columns([1, 1, 8])
+                with col_b1:
+                    if st.button("📝", key=f"m_edit_{row['id']}"):
+                        st.session_state.edit_mode = True
+                        st.session_state.edit_id = row['id']
+                        st.session_state.form_author = row['author']
+                        st.session_state.form_item_name = row['item_name']
+                        st.session_state.form_update = True if row['is_update'] == "Y" else False
+                        st.session_state.form_dtc = True if row['is_dtc'] == "Y" else False
+                        st.rerun()
+                with col_b2:
+                    if st.button("🗑️", key=f"m_del_{row['id']}"):
+                        confirm_delete_dialog(row['id'], row['item_name'])
+                st.write(" ") # 행간 구분용 아주 작은 여백
 else:
     st.info("등록된 내역이 없습니다.")
 
 st.write("---")
 
 # --- 최하단: 다운로드 및 초기화 존 ---
-st.markdown("### 💾 마감 백업 및 마감 리셋")
+# 💡 [초슬림 포인트 7] 하단 다운로드 구역 제목 축소 및 구분선 제거
+st.markdown("##### 💾 백업/리셋")
 col_d1, col_d2 = st.columns(2)
 
 with col_d1:
@@ -301,7 +306,7 @@ with col_d1:
         export_df.to_excel(towrite, index=False, engine="openpyxl")
         towrite.seek(0)
         st.download_button(
-            label="📈 일반 리스트 국문 저장",
+            label="📈 일반 저장",
             data=towrite,
             file_name="KOSTAL_rework_list.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -312,15 +317,14 @@ with col_d2:
     if os.path.exists("KOSTAL_photo_registry.xlsx"):
         with open("KOSTAL_photo_registry.xlsx", "rb") as f:
             st.download_button(
-                label="📸 사진대장 다운로드",
+                label="📸 사진 저장",
                 data=f,
                 file_name="KOSTAL_photo_registry.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 use_container_width=True
             )
 
-st.write(" ")
-if st.button("🚨 마감 작업 전체 초기화 (Reset)", use_container_width=True):
+if st.button("🚨 전체 마감 리셋", use_container_width=True):
     clear_data()
     if os.path.exists("KOSTAL_photo_registry.xlsx"):
         os.remove("KOSTAL_photo_registry.xlsx")
