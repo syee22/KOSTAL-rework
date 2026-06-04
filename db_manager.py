@@ -15,3 +15,6 @@ def save_photos_to_db(conn, vin, files):
 
 def get_photos_by_vin(conn, vin):
     return conn.execute("SELECT image_data FROM photos WHERE vin = ? ORDER BY seq", (vin,)).fetchall()
+def delete_photos_by_vin(conn, vin):
+    conn.execute("DELETE FROM photos WHERE vin = ?", (vin,))
+    conn.commit()
