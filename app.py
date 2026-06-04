@@ -58,7 +58,6 @@ st.markdown("#### 📱 KOSTAL 리워크 현황")
 # 수정 모드용 상태 관리
 if "edit_id" not in st.session_state: st.session_state.edit_id = None
 
-# 수정 버튼 클릭 처리 (루프 밖에서 처리)
 def enter_edit_mode(row):
     st.session_state.edit_id = row['id']
     st.session_state.edit_author = row['author']
@@ -66,8 +65,8 @@ def enter_edit_mode(row):
     st.session_state.edit_upd = (row['is_update'] == 'Y')
     st.session_state.edit_dtc = (row['is_dtc'] == 'Y')
 
-# 입력 폼 (수정 모드일 때만 데이터 채움)
-with st.form("entry_form", clear_on_submit=True):
+# 입력 폼
+with st.form("entry_form"):
     author = st.text_input("이름", value=st.session_state.get("edit_author", ""))
     item_name = st.text_input("VIN 6자리", value=st.session_state.get("edit_item", ""), max_chars=6)
     c1, c2 = st.columns(2)
@@ -75,27 +74,39 @@ with st.form("entry_form", clear_on_submit=True):
     chk_dtc = c2.checkbox("DTC", value=st.session_state.get("edit_dtc", False))
     
     submit_btn = st.form_submit_button("🚀 등록 / ✅ 수정 완료")
-    
     if submit_btn:
         if st.session_state.edit_id:
             update_data(st.session_state.edit_id, author, item_name, "Y" if chk_update else "N", "Y" if chk_dtc else "N")
-            st.session_state.edit_id = None # 수정 완료 후 ID 초기화
+            st.session_state.edit_id = None
         else:
             insert_data(author, item_name, "Y" if chk_update else "N", "Y" if chk_dtc else "N")
         st.rerun()
 
 st.write("---")
 
-# 리스트 표시
+# 리스트 표시 영역
 df = load_data()
-if search := st.text_input("🔍 VIN 또는 이름 검색"):
+search = st.text_input("🔍 VIN 또는 이름 검색")
+if search:
     df = df[df['item_name'].str.contains(search, na=False) | df['author'].str.contains(search, na=False)]
 
-# ... (타이틀 및 개수 표시 로직 동일) ...
 upd_count = len(df[df['is_update'] == 'Y'])
 dtc_count = len(df[df['is_dtc'] == 'Y'])
 
-st.markdown(f"##### 📋 KOSTAL 리워크 현황 ({len(df)}) | 업뎃:{upd_count} | DTC:{dtc_count}")
+# 타이틀 + 엑셀 저장 버튼 영역
+t_col, b_col = st.columns([6, 4])
+with t_col:
+    st.markdown(f"##### 📋 리스트 <span style='color:red;'>({len(df)})</span> <span style='color:blue; font-size:12px;'>| 업뎃:{upd_count} | DTC:{dtc_count}</span>", unsafe_allow_html=True)
+with b_col:
+    if not df.empty:
+        export_df = df.copy()
+        export_df['순번'] = range(1, len(df) + 1)
+        export_df = export_df[['순번', 'timestamp', 'author', 'item_name', 'is_update', 'is_dtc']]
+        export_df.columns = ['순번', '시간', '이름', 'VIN 넘버', '업데이트', 'DTC']
+        towrite = io.BytesIO()
+        export_df.to_excel(towrite, index=False, engine="openpyxl")
+        towrite.seek(0)
+        st.download_button("📥 엑셀 저장", towrite, "KOSTAL_list.xlsx", use_container_width=True)
 
 for _, row in df.iterrows():
     cols = st.columns([5, 2.5, 2.5])
@@ -109,3 +120,4 @@ for _, row in df.iterrows():
         if st.button("삭제", key=f"d{row['id']}"):
             delete_data(row['id'])
             st.rerun()
+    st.write("---")
