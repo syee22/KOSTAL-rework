@@ -83,12 +83,11 @@ else:
 
 st.write("---")
 
-# --- 4. 검색 및 리스트 표시 (엑셀 버튼 상단 배치) ---
+# --- 4. 검색 및 리스트 표시 ---
 df = load_data()
 upd_count = len(df[df['is_update'] == 'Y'])
 dtc_count = len(df[df['is_dtc'] == 'Y'])
 
-# 제목과 버튼을 한 라인에 배치
 t_col, b_col = st.columns([6, 4])
 with t_col:
     st.markdown(
@@ -98,8 +97,12 @@ with t_col:
     )
 with b_col:
     if not df.empty:
-        export_df = df[['id', 'timestamp', 'author', 'item_name', 'is_update', 'is_dtc']].copy()
+        # 삭제 후 반영된 1부터 시작하는 순번 적용
+        export_df = df.copy()
+        export_df['순번'] = range(1, len(df) + 1)
+        export_df = export_df[['순번', 'timestamp', 'author', 'item_name', 'is_update', 'is_dtc']]
         export_df.columns = ['순번', '시간', '이름', 'VIN 넘버', '업데이트', 'DTC']
+        
         towrite = io.BytesIO()
         export_df.to_excel(towrite, index=False, engine="openpyxl")
         towrite.seek(0)
