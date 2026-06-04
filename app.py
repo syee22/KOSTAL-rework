@@ -34,39 +34,43 @@ def delete_data(id):
 st.set_page_config(page_title="KOSTAL Mobile", layout="centered")
 st.markdown("#### 📱 KOSTAL 리워크 현황")
 
-# 수정 모드 상태 초기화
+# 세션 상태 초기화
 if "edit_id" not in st.session_state: st.session_state.edit_id = None
+if "current_author" not in st.session_state: st.session_state.current_author = ""
 
 # 입력 폼
 with st.form("entry_form"):
-    author = st.text_input("이름", value=st.session_state.get("edit_author", ""))
+    # 이름은 세션 상태의 값을 그대로 사용 (리셋하지 않음)
+    author = st.text_input("이름", value=st.session_state.current_author)
     item_name = st.text_input("VIN 6자리", value=st.session_state.get("edit_item", ""), max_chars=6)
     c1, c2 = st.columns(2)
     chk_u = c1.checkbox("업데이트", value=st.session_state.get("edit_upd", False))
     chk_d = c2.checkbox("DTC", value=st.session_state.get("edit_dtc", False))
     
     if st.form_submit_button("🚀 등록 / ✅ 수정 완료"):
+        # 등록/수정 시 현재 작성된 이름을 세션에 저장
+        st.session_state.current_author = author
+        
         if st.session_state.edit_id:
             update_data(st.session_state.edit_id, author, item_name, "Y" if chk_u else "N", "Y" if chk_d else "N")
         else:
             insert_data(author, item_name, "Y" if chk_u else "N", "Y" if chk_d else "N")
         
-        # 💡 [핵심] 등록/수정 후 입력값 리셋
+        # 이름 외 항목만 리셋
         st.session_state.update({
-            "edit_id": None, "edit_author": "", "edit_item": "", 
+            "edit_id": None, "edit_item": "", 
             "edit_upd": False, "edit_dtc": False
         })
         st.rerun()
 
 st.write("---")
 
-# 검색 및 데이터 로드
+# 검색 및 리스트 표시 로직은 이전과 동일합니다.
 df = pd.read_sql_query("SELECT * FROM items ORDER BY id DESC", conn)
 search = st.text_input("🔍 이름 또는 VIN 검색")
 if search:
     df = df[df['item_name'].str.contains(search, na=False) | df['author'].str.contains(search, na=False)]
 
-# 통계 및 리스트 표시
 u_cnt = len(df[df['is_update'] == 'Y'])
 d_cnt = len(df[df['is_dtc'] == 'Y'])
 
@@ -87,7 +91,7 @@ for row in df.itertuples():
         st.markdown(f"<small>{row.timestamp} | **{row.item_name}** | {row.author}</small>", unsafe_allow_html=True)
     with cols[1]:
         if st.button("수정", key=f"e{row.id}", use_container_width=True):
-            st.session_state.update({"edit_id": row.id, "edit_author": row.author, "edit_item": row.item_name, "edit_upd": (row.is_update=='Y'), "edit_dtc": (row.is_dtc=='Y')})
+            st.session_state.update({"edit_id": row.id, "current_author": row.author, "edit_item": row.item_name, "edit_upd": (row.is_update=='Y'), "edit_dtc": (row.is_dtc=='Y')})
             st.rerun()
     with cols[2]:
         if st.button("삭제", key=f"d{row.id}", use_container_width=True):
