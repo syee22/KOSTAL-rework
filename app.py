@@ -29,7 +29,21 @@ def update_data(id, a, i, u, d):
 def delete_data(id):
     conn.execute("DELETE FROM items WHERE id = ?", (id,))
     conn.commit()
-
+if st.form_submit_button("🚀 등록 / ✅ 수정 완료"):
+        st.session_state.current_author = author
+        if st.session_state.edit_id:
+            update_data(st.session_state.edit_id, author, item_name, "Y" if chk_u else "N", "Y" if chk_d else "N")
+        else:
+            insert_data(author, item_name, "Y" if chk_u else "N", "Y" if chk_d else "N")
+        
+        # --- 여기가 리셋 구간입니다 ---
+        st.session_state.edit_id = None     # 수정 모드 종료
+        st.session_state.next_vin = ""      # VIN 입력칸 리셋
+        st.session_state.next_upd = False   # 업데이트 체크박스 해제
+        st.session_state.next_dtc = False   # DTC 체크박스 해제
+        # -----------------------------
+        
+        st.rerun()
 # --- 3. UI ---
 st.set_page_config(page_title="KOSTAL Mobile", layout="centered")
 st.markdown("#### 📱 KOSTAL 리워크 현황")
