@@ -54,23 +54,23 @@ with st.form("entry_form", clear_on_submit=False):
 
 st.write("---")
 
-# 검색 및 데이터 로드
+# 데이터 로드 및 검색
 df_all = pd.read_sql_query("SELECT * FROM items ORDER BY id DESC", conn)
 search = st.text_input("🔍 이름 또는 VIN 검색")
 df = df_all[df_all['item_name'].str.contains(search, na=False) | df_all['author'].str.contains(search, na=False)] if search else df_all
 
-# 등록 현황 및 버튼 분리
+# 등록 현황 및 버튼 영역
 t_col, b_col1, b_col2 = st.columns([4, 3, 3])
 with t_col:
-    st.markdown(f"##### 📋 {len(df)}건 | <small>업뎃:{len(df[df['is_update'] == 'Y'])} | DTC:{len(df[df['is_dtc'] == 'Y'])}</small>", unsafe_allow_html=True)
+    st.markdown(f"##### 📋 {len(df)}건 <small>| 업뎃:{len(df[df['is_update'] == 'Y'])} | DTC:{len(df[df['is_dtc'] == 'Y'])}</small>", unsafe_allow_html=True)
 
-with b_col1: # 기존 텍스트 리스트 저장
+with b_col1:
     towrite = io.BytesIO()
     df[['timestamp', 'author', 'item_name', 'is_update', 'is_dtc']].to_excel(towrite, index=False)
     st.download_button("📥 리스트 저장", towrite.getvalue(), "list.xlsx", use_container_width=True)
 
-with b_col2: # 사진 데이터만 별도 시트 저장
-    if st.button("📥 사진 데이터 다운로드", use_container_width=True):
+with b_col2:
+    if st.button("📥 사진 데이터 준비", use_container_width=True):
         towrite_p = io.BytesIO()
         with pd.ExcelWriter(towrite_p, engine='xlsxwriter') as writer:
             for vin in df['item_name'].unique():
@@ -78,8 +78,9 @@ with b_col2: # 사진 데이터만 별도 시트 저장
                 if photos:
                     sheet = writer.book.add_worksheet(name=str(vin))
                     for idx, (img_data,) in enumerate(photos):
-                        sheet.insert_image(chr(66 + (idx * 10)) + '2', 'photo.png', {'image_data': img_data, 'x_scale': 0.3, 'y_scale': 0.3})
-        st.download_button("📥 사진 저장 준비 완료", towrite_p.getvalue(), "photos.xlsx", use_container_width=True)
+                        image_stream = io.BytesIO(img_data)
+                        sheet.insert_image(chr(66 + (idx * 10)) + '2', 'photo.png', {'image_data': image_stream, 'x_scale': 0.3, 'y_scale': 0.3})
+        st.download_button("📥 상세 사진 저장", towrite_p.getvalue(), "photos.xlsx", use_container_width=True)
 
 # 리스트 표시
 for row in df.itertuples():
