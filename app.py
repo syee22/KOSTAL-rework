@@ -5,13 +5,13 @@ import pytz
 from datetime import datetime
 import db_manager
 
-# 1. 페이지 및 스타일 설정
+# 1. 페이지 설정 및 CSS 최적화
 st.set_page_config(page_title="KOSTAL Mobile", layout="centered")
 st.markdown("""
     <style>
-    /* 버튼을 텍스트 링크처럼 보이게 설정 (가로 정렬 유지) */
+    /* 버튼을 텍스트 링크처럼 보이게 (박스 테두리 제거 및 한 줄 정렬) */
     div.stButton > button { 
-        padding: 0px 2px !important; 
+        padding: 0px 5px !important; 
         font-size: 11px !important; 
         height: 25px !important; 
         border: none !important; 
@@ -63,7 +63,7 @@ with st.form("entry_form", clear_on_submit=False):
 
 st.write("---")
 
-# 5. 리스트 및 통계
+# 5. 데이터 리스트 및 통계
 df = pd.read_sql_query("SELECT * FROM items ORDER BY id DESC", conn)
 search = st.text_input("🔍 이름 또는 VIN 검색")
 if search: df = df[df['item_name'].str.contains(search, na=False) | df['author'].str.contains(search, na=False)]
@@ -99,8 +99,8 @@ with b_col2:
 
 # 6. 리스트 표시 (모바일 최적화)
 for row in df.itertuples():
-    c_list = st.columns([5, 1, 1])
-    c_list[0].markdown(f"<small>{row.timestamp} | **{row.item_name}** | {row.author}<br>UP:{row.is_update} / DTC:{row.is_dtc}</small>", unsafe_allow_html=True)
+    c_list = st.columns([6, 1, 1])
+    c_list[0].markdown(f"<small>{row.timestamp} | **{row.item_name}** | {row.author} (UP:{row.is_update}/DTC:{row.is_dtc})</small>", unsafe_allow_html=True)
     
     if c_list[1].button("수정", key=f"e{row.id}"):
         st.session_state.update({"edit_id": row.id, "current_author": row.author, "next_vin": row.item_name, "next_upd": (row.is_update=='Y'), "next_dtc": (row.is_dtc=='Y')})
