@@ -2,9 +2,7 @@ import sqlite3
 
 def init_db():
     conn = sqlite3.connect("kostal_rework_v3.db", check_same_thread=False)
-    # 기존 데이터 테이블
     conn.execute("CREATE TABLE IF NOT EXISTS items (id INTEGER PRIMARY KEY AUTOINCREMENT, timestamp TEXT, author TEXT, item_name TEXT, is_update TEXT, is_dtc TEXT)")
-    # 사진 저장용 테이블 (VIN당 최대 4장)
     conn.execute("CREATE TABLE IF NOT EXISTS photos (vin TEXT, seq INTEGER, image_data BLOB, PRIMARY KEY (vin, seq))")
     conn.commit()
     return conn
