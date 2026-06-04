@@ -53,10 +53,14 @@ if "edit" in query_params:
 with st.form("entry_form", clear_on_submit=False):
     author = st.text_input("이름", value=st.session_state.current_author)
     item_name = st.text_input("VIN 6자리", value=st.session_state.next_vin, max_chars=6)
-    photo_files = st.file_uploader("검사 사진 업로드 (최대 4개)", type=['jpg', 'jpeg', 'png'], accept_multiple_files=True)
+    
+    # 체크박스 영역
     c1, c2 = st.columns(2)
     chk_u = c1.checkbox("업데이트", value=st.session_state.next_upd)
     chk_d = c2.checkbox("DTC", value=st.session_state.next_dtc)
+    
+    # 사진 업로드 영역 (아래로 이동)
+    photo_files = st.file_uploader("검사 사진 업로드 (최대 4개)", type=['jpg', 'jpeg', 'png'], accept_multiple_files=True)
     
     if st.form_submit_button("🚀 등록 / ✅ 수정 완료"):
         if item_name:
@@ -88,7 +92,7 @@ with b_col1:
     df_ex = df.copy()
     df_ex['순번'] = range(1, len(df)+1)
     df_ex = df_ex[['순번', 'timestamp', 'author', 'item_name', 'is_update', 'is_dtc']]
-    df_ex.columns = ['순번', '시간', '이름', 'VIN', '업데이트', 'DTC'] # 컬럼명 수정 적용
+    df_ex.columns = ['순번', '시간', '이름', 'VIN', '업데이트', 'DTC']
     towrite = io.BytesIO()
     df_ex.to_excel(towrite, index=False)
     st.download_button("📥 VIN 현황 저장", towrite.getvalue(), "list.xlsx", use_container_width=True)
