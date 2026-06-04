@@ -85,7 +85,16 @@ st.write("---")
 
 # --- 4. 검색 및 리스트 표시 ---
 df = load_data()
-st.markdown(f"##### 📋 마감 현황 <span style='color:red; font-size:16px; font-weight:bold;'>({len(df)})</span>", unsafe_allow_html=True)
+
+# 요약 통계 계산
+upd_count = len(df[df['is_update'] == 'Y'])
+dtc_count = len(df[df['is_dtc'] == 'Y'])
+
+st.markdown(
+    f"##### 📋 마감 현황 <span style='color:red; font-size:16px; font-weight:bold;'>({len(df)})</span> "
+    f"<span style='color:blue; font-size:14px;'>| 업뎃: {upd_count} | DTC: {dtc_count}</span>", 
+    unsafe_allow_html=True
+)
 
 search = st.text_input("🔍 VIN 또는 이름 검색", placeholder="검색어를 입력하세요")
 if search:
@@ -116,7 +125,6 @@ col_d1, col_d2 = st.columns(2)
 
 with col_d1:
     if not df.empty:
-        # 💡 [컬럼명 재설정] 요청하신 컬럼명으로 변경하여 저장
         export_df = df[['id', 'timestamp', 'author', 'item_name', 'is_update', 'is_dtc']].copy()
         export_df.columns = ['순번', '시간', '이름', 'VIN 넘버', '업데이트', 'DTC']
         
