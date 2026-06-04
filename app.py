@@ -9,6 +9,8 @@ from datetime import datetime
 def init_db():
     conn = sqlite3.connect("kostal_rework_v3.db", check_same_thread=False)
     conn.execute("CREATE TABLE IF NOT EXISTS items (id INTEGER PRIMARY KEY AUTOINCREMENT, timestamp TEXT, author TEXT, item_name TEXT, is_update TEXT, is_dtc TEXT)")
+    # 사진 저장용 테이블 추가
+    conn.execute("CREATE TABLE IF NOT EXISTS photos (vin TEXT PRIMARY KEY, image_data BLOB)")
     conn.commit()
     return conn
 
@@ -30,6 +32,10 @@ def delete_data(id):
     conn.execute("DELETE FROM items WHERE id = ?", (id,))
     conn.commit()
 
+def save_photo(vin, image_bytes):
+    conn.execute("INSERT OR REPLACE INTO photos (vin, image_data) VALUES (?, ?)", (vin, image_bytes))
+    conn.commit()
+
 # --- 3. UI ---
 st.set_page_config(page_title="KOSTAL Mobile", layout="centered")
 st.markdown("#### 📱 KOSTAL 리워크 현황")
@@ -45,18 +51,21 @@ if "next_dtc" not in st.session_state: st.session_state.next_dtc = False
 with st.form("entry_form", clear_on_submit=False):
     author = st.text_input("이름", value=st.session_state.current_author)
     item_name = st.text_input("VIN 6자리", value=st.session_state.next_vin, max_chars=6)
+    photo_file = st.file_uploader("검사 사진 업로드", type=['jpg', 'jpeg', 'png'])
     c1, c2 = st.columns(2)
     chk_u = c1.checkbox("업데이트", value=st.session_state.next_upd)
     chk_d = c2.checkbox("DTC", value=st.session_state.next_dtc)
     
     if st.form_submit_button("🚀 등록 / ✅ 수정 완료"):
-        st.session_state.current_author = author
-        if st.session_state.edit_id:
-            update_data(st.session_state.edit_id, author, item_name, "Y" if chk_u else "N", "Y" if chk_d else "N")
-        else:
-            insert_data(author, item_name, "Y" if chk_u else "N", "Y" if chk_d else "N")
+        if item_name:
+            if photo_file:
+                save_photo(item_name, photo_file.getvalue())
+            
+            if st.session_state.edit_id:
+                update_data(st.session_state.edit_id, author, item_name, "Y" if chk_u else "N", "Y" if chk_d else "N")
+            else:
+                insert_data(author, item_name, "Y" if chk_u else "N", "Y" if chk_d else "N")
         
-        # 입력 항목 리셋
         st.session_state.edit_id = None
         st.session_state.next_vin = ""
         st.session_state.next_upd = False
@@ -69,32 +78,33 @@ st.write("---")
 df_all = pd.read_sql_query("SELECT * FROM items ORDER BY id DESC", conn)
 search = st.text_input("🔍 이름 또는 VIN 검색")
 
-if search:
-    df = df_all[df_all['item_name'].str.contains(search, na=False) | df_all['author'].str.contains(search, na=False)]
-else:
-    df = df_all
-
-# 검색 결과 개수 표시
-st.markdown(f"**검색 결과: {len(df)}건**")
+df = df_all[df_all['item_name'].str.contains(search, na=False) | df_all['author'].str.contains(search, na=False)] if search else df_all
 
 # 통계 계산
 u_cnt = len(df[df['is_update'] == 'Y'])
 d_cnt = len(df[df['is_dtc'] == 'Y'])
 
-# 등록 현황 및 엑셀 저장
+# 등록 현황 및 엑셀 저장 (사진 포함)
 t_col, b_col = st.columns([6, 4])
 with t_col:
     st.markdown(f"##### 📋 등록 현황 <span style='color:black;'>{len(df)}건</span> <span style='color:blue; font-size:12px;'>| 업뎃:{u_cnt} | DTC:{d_cnt}</span>", unsafe_allow_html=True)
 with b_col:
     if not df.empty:
-        df_ex = df.copy()
-        df_ex['순번'] = range(1, len(df)+1)
-        df_ex = df_ex[['순번', 'timestamp', 'author', 'item_name', 'is_update', 'is_dtc']]
-        df_ex.columns = ['순번', '시간', '이름', 'VIN', '업데이트', 'DTC']
-        
         towrite = io.BytesIO()
-        df_ex.to_excel(towrite, index=False)
-        st.download_button("📥 엑셀 저장", towrite.getvalue(), "list.xlsx", use_container_width=True)
+        with pd.ExcelWriter(towrite, engine='xlsxwriter') as writer:
+            df_ex = df.copy()
+            df_ex['순번'] = range(1, len(df)+1)
+            df_ex = df_ex[['순번', 'timestamp', 'author', 'item_name', 'is_update', 'is_dtc']]
+            df_ex.columns = ['순번', '시간', '이름', 'VIN', '업데이트', 'DTC']
+            df_ex.to_excel(writer, sheet_name='리워크현황', index=False)
+            
+            # 사진 데이터를 각 VIN 시트에 추가
+            photos_df = pd.read_sql("SELECT * FROM photos", conn)
+            for _, row in photos_df.iterrows():
+                sheet = writer.book.add_worksheet(name=row['vin'])
+                sheet.insert_image('B2', 'photo.png', {'image_data': row['image_data']})
+        
+        st.download_button("📥 엑셀(사진포함) 저장", towrite.getvalue(), "list_with_photos.xlsx", use_container_width=True)
 
 # 리스트 표시
 for row in df.itertuples():
@@ -104,13 +114,7 @@ for row in df.itertuples():
         st.markdown(info_text, unsafe_allow_html=True)
     with cols[1]:
         if st.button("수정", key=f"e{row.id}", use_container_width=True):
-            st.session_state.update({
-                "edit_id": row.id, 
-                "current_author": row.author, 
-                "next_vin": row.item_name, 
-                "next_upd": (row.is_update=='Y'), 
-                "next_dtc": (row.is_dtc=='Y')
-            })
+            st.session_state.update({"edit_id": row.id, "current_author": row.author, "next_vin": row.item_name, "next_upd": (row.is_update=='Y'), "next_dtc": (row.is_dtc=='Y')})
             st.rerun()
     with cols[2]:
         if st.button("삭제", key=f"d{row.id}", use_container_width=True):
