@@ -9,54 +9,36 @@ from PIL import Image
 import openpyxl
 from openpyxl.drawing.image import Image as OpenpyxlImage
 
-# --- 1. 데이터베이스 초기화 함수 ---
+# --- 1. 데이터베이스 초기화 ---
 def init_db():
     conn = sqlite3.connect("kostal_rework_v3.db", check_same_thread=False)
     cursor = conn.cursor()
-    cursor.execute(
-        """
+    cursor.execute("""
         CREATE TABLE IF NOT EXISTS items (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            timestamp TEXT,
-            author TEXT,
-            item_name TEXT,
-            is_update TEXT,  
-            is_dtc TEXT       
+            timestamp TEXT, author TEXT, item_name TEXT,
+            is_update TEXT, is_dtc TEXT       
         )
-    """
-    )
+    """)
     conn.commit()
     return conn
 
 conn = init_db()
 
-# --- 2. 현재 한국 시간(KST) 구하기 ---
+# --- 2. 함수들 ---
 def get_current_kst_time():
-    kst = pytz.timezone('Asia/Seoul')
-    now = datetime.now(kst)
-    return now.strftime('%m-%d %H:%M')
+    return datetime.now(pytz.timezone('Asia/Seoul')).strftime('%m-%d %H:%M')
 
-# --- 3. 데이터베이스 조작 함수들 ---
 def insert_data(author, item_name, is_update, is_dtc):
-    current_time = get_current_kst_time()
     cursor = conn.cursor()
-    cursor.execute(
-        "INSERT INTO items (timestamp, author, item_name, is_update, is_dtc) VALUES (?, ?, ?, ?, ?)",
-        (current_time, author, item_name, is_update, is_dtc),
-    )
+    cursor.execute("INSERT INTO items (timestamp, author, item_name, is_update, is_dtc) VALUES (?, ?, ?, ?, ?)",
+                   (get_current_kst_time(), author, item_name, is_update, is_dtc))
     conn.commit()
 
 def update_data(item_id, author, item_name, is_update, is_dtc):
-    current_time = get_current_kst_time()
     cursor = conn.cursor()
-    cursor.execute(
-        """
-        UPDATE items 
-        SET timestamp = ?, author = ?, item_name = ?, is_update = ?, is_dtc = ? 
-        WHERE id = ?
-        """,
-        (current_time, author, item_name, is_update, is_dtc, item_id),
-    )
+    cursor.execute("UPDATE items SET timestamp=?, author=?, item_name=?, is_update=?, is_dtc=? WHERE id=?",
+                   (get_current_kst_time(), author, item_name, is_update, is_dtc, item_id))
     conn.commit()
 
 def delete_data(item_id):
@@ -72,201 +54,77 @@ def clear_data():
     cursor.execute("DELETE FROM items")
     conn.commit()
 
-# --- 4. 엑셀 사진 저장 함수 ---
 def save_image_to_excel(item_name, is_update, is_dtc, uploaded_file):
     excel_filename = "KOSTAL_photo_registry.xlsx"
+    wb = openpyxl.load_workbook(excel_filename) if os.path.exists(excel_filename) else openpyxl.Workbook()
+    clean_name = "".join(c for c in item_name if c not in r'\/??*[]:').strip()[:30] or "VIN"
+    ws = wb[clean_name] if clean_name in wb.sheetnames else wb.create_sheet(title=clean_name)
+    if ws.max_row == 1 and ws['A1'].value is None:
+        ws.append(["시간", "이름", "VIN 넘버", "업데이트", "DTC", "첨부 사진"])
     
-    if os.path.exists(excel_filename):
-        wb = openpyxl.load_workbook(excel_filename)
-    else:
-        wb = openpyxl.Workbook()
-        wb.active.title = "임시_기본시트"
-        
-    clean_sheet_name = "".join(c for c in item_name if c not in r'\/??*[]:').strip()[:30]
-    if not clean_sheet_name:
-        clean_sheet_name = "정제된_VIN"
-        
-    if clean_sheet_name in wb.sheetnames:
-        ws = wb[clean_sheet_name]
-    else:
-        ws = wb.create_sheet(title=clean_sheet_name)
-        ws['A1'] = "시간"
-        ws['B1'] = "이름"
-        ws['C1'] = "VIN 넘버"
-        ws['D1'] = "업데이트"
-        ws['E1'] = "DTC"
-        ws['F1'] = "첨부 사진"
-        
-    image = Image.open(uploaded_file)
-    image.thumbnail((400, 400))
+    img = Image.open(uploaded_file)
+    img.thumbnail((400, 400))
+    img_byte = io.BytesIO()
+    img.convert("RGB").save(img_byte, format='JPEG', quality=75)
+    img_byte.seek(0)
     
-    img_byte_arr = io.BytesIO()
-    if image.mode in ("RGBA", "P"):
-        image = image.convert("RGB")
-    image.save(img_byte_arr, format='JPEG', quality=75, optimize=True)
-    img_byte_arr.seek(0)
-    
-    xl_img = OpenpyxlImage(img_byte_arr)
-    next_row = ws.max_row + 1 if ws.max_row > 1 or ws['A1'].value != "시간" else 2
-    
-    kst = pytz.timezone('Asia/Seoul')
-    full_time = datetime.now(kst).strftime('%Y-%m-%d %H:%M')
-    
-    ws[f'A{next_row}'] = full_time
-    ws[f'B{next_row}'] = st.session_state.form_author
-    ws[f'C{next_row}'] = item_name
-    ws[f'D{next_row}'] = is_update
-    ws[f'E{next_row}'] = is_dtc
-    
+    xl_img = OpenpyxlImage(img_byte)
+    next_row = ws.max_row + 1
+    ws.append([get_current_kst_time(), st.session_state.form_author, item_name, is_update, is_dtc])
     ws.add_image(xl_img, f'F{next_row}')
-    ws.row_dimensions[next_row].height = 160  
-    ws.column_dimensions['F'].width = 45
-    
-    if "임시_기본시트" in wb.sheetnames and len(wb.sheetnames) > 1:
-        del wb["임시_기본시트"]
-        
+    ws.row_dimensions[next_row].height = 160
     wb.save(excel_filename)
-    return excel_filename
 
-# --- 5. 모달 팝업(Dialog) 정의 ---
-@st.dialog("⚠️ 데이터 삭제 확인")
+@st.dialog("⚠️ 삭제 확인")
 def confirm_delete_dialog(item_id, item_name):
-    st.write(f"정말로 VIN 넘버 **[{item_name}]** 항목을 삭제하시겠습니까?")
-    st.write("")
-    col_pop1, col_pop2 = st.columns(2)
-    with col_pop1:
-        if st.button("🔴 삭제", use_container_width=True):
-            delete_data(item_id)
-            st.toast("삭제되었습니다.")
-            st.rerun()
-    with col_pop2:
-        if st.button("취소", use_container_width=True):
-            st.rerun()
-
-@st.dialog("🚨 입력 오류")
-def validation_error_dialog(message):
-    st.error(message)
-    st.write("VIN 넘버 자리에 **숫자 6자리**를 정확히 입력해 주세요.")
-    if st.button("확인", use_container_width=True):
+    st.write(f"VIN **[{item_name}]**를 삭제할까요?")
+    if st.button("삭제", use_container_width=True):
+        delete_data(item_id)
         st.rerun()
 
-# --- 6. 세션 상태 설정 ---
-if "edit_mode" not in st.session_state:
-    st.session_state.edit_mode = False
-if "edit_id" not in st.session_state:
-    st.session_state.edit_id = None
-if "form_author" not in st.session_state:
-    st.session_state.form_author = ""
-if "form_item_name" not in st.session_state:
-    st.session_state.form_item_name = ""
-if "form_update" not in st.session_state:
-    st.session_state.form_update = False
-if "form_dtc" not in st.session_state:
-    st.session_state.form_dtc = False
-
-# --- 7. Streamlit 모바일형 UI 세팅 ---
+# --- 3. UI 및 상태 관리 ---
 st.set_page_config(page_title="KOSTAL Mobile", layout="centered")
-
 st.markdown("#### 📱 KOSTAL 시스템")
 
-# --- 메인화면 최상단: 데이터 입력/수정 컨트롤 박스 ---
+if "edit_mode" not in st.session_state: st.session_state.edit_mode = False
+
+# 입력 폼
+author = st.text_input("👤 이름", value=st.session_state.get("form_author", ""), placeholder="이름")
+item_name = st.text_input("📦 VIN 6자리", value=st.session_state.get("form_item_name", ""), max_chars=6, placeholder="123456")
+c1, c2, c3 = st.columns(3)
+chk_update = c1.checkbox("🔄 업뎃", value=st.session_state.get("form_update", False))
+chk_dtc = c2.checkbox("⚠️ DTC", value=st.session_state.get("form_dtc", False))
+uploaded_file = st.file_uploader("📸 사진 첨부", type=["png", "jpg", "jpeg"])
+
+# 버튼 로직
 if st.session_state.edit_mode:
-    st.warning(f"✏️ ID [{st.session_state.edit_id}] 수정 중")
+    if st.button("✅ 수정 완료", type="primary", use_container_width=True):
+        update_data(st.session_state.edit_id, author, item_name, "Y" if chk_update else "N", "Y" if chk_dtc else "N")
+        if uploaded_file: save_image_to_excel(item_name, "Y" if chk_update else "N", "Y" if chk_dtc else "N", uploaded_file)
+        st.session_state.edit_mode = False; st.rerun()
 else:
-    st.markdown("##### ✍️ 실시간 현장 등록")
-
-author = st.text_input("👤 이름", value=st.session_state.form_author, autocomplete="name", placeholder="이름 입력")
-item_name = st.text_input("📦 VIN 6자리", value=st.session_state.form_item_name, max_chars=6, placeholder="123456")
-
-st.markdown("**🛠️ 체크**")
-col_chk1, col_chk2, col_chk3 = st.columns(3)
-with col_chk1:
-    chk_update = st.checkbox("🔄 업뎃", value=st.session_state.form_update)
-with col_chk2:
-    chk_dtc = st.checkbox("⚠️ DTC", value=st.session_state.form_dtc)
-
-val_update = "Y" if chk_update else "N"
-val_dtc = "Y" if chk_dtc else "N"
-
-uploaded_file = st.file_uploader("📸 현장 사진 촬영/첨부", type=["png", "jpg", "jpeg"])
-
-if st.session_state.edit_mode:
-    col_m_btn1, col_m_btn2 = st.columns(2)
-    with col_m_btn1:
-        if st.button("✅ 수정", type="primary", use_container_width=True):
-            if author and item_name:
-                if not item_name.isdigit() or len(item_name) != 6:
-                    validation_error_dialog(f"형식이 잘못되었습니다.")
-                else:
-                    update_data(st.session_state.edit_id, author, item_name, val_update, val_dtc)
-                    if uploaded_file is not None:
-                        save_image_to_excel(item_name, val_update, val_dtc, uploaded_file)
-                    st.toast("수정되었습니다!")
-                    st.session_state.edit_mode = False
-                    st.session_state.edit_id = None
-                    st.session_state.form_author = author 
-                    st.session_state.form_item_name = ""
-                    st.session_state.form_update = False
-                    st.session_state.form_dtc = False
-                    st.rerun()
-    with col_m_btn2:
-        if st.button("❌ 취소", use_container_width=True):
-            st.session_state.edit_mode = False
-            st.session_state.edit_id = None
-            st.session_state.form_author = author
-            st.session_state.form_item_name = ""
-            st.session_state.form_update = False
-            st.session_state.form_dtc = False
-            st.rerun()
-else:
-    if st.button("🚀 현장 리스트에 즉시 등록", type="primary", use_container_width=True):
-        if author and item_name:
-            if not item_name.isdigit() or len(item_name) != 6:
-                validation_error_dialog(f"VIN 넘버는 반드시 숫자 6자리여야 합니다.")
-            else:
-                insert_data(author, item_name, val_update, val_dtc)
-                if uploaded_file is not None:
-                    save_image_to_excel(item_name, val_update, val_dtc, uploaded_file)
-                st.toast("등록되었습니다!")
-                st.session_state.form_author = author
-                st.session_state.form_item_name = ""
-                st.rerun()
-        else:
-            st.error("작성자와 VIN 넘버는 필수입니다.")
+    if st.button("🚀 등록", type="primary", use_container_width=True):
+        insert_data(author, item_name, "Y" if chk_update else "N", "Y" if chk_dtc else "N")
+        if uploaded_file: save_image_to_excel(item_name, "Y" if chk_update else "N", "Y" if chk_dtc else "N", uploaded_file)
+        st.rerun()
 
 st.write("---")
 
-# --- 8. 하단 모바일 특화 카드형 리스트 ---
+# 현황 리스트
 df = load_data()
 st.markdown("##### 📋 마감 현황")
-search_query = st.text_input("", placeholder="🔍 VIN/이름 검색", label_visibility="collapsed")
-
+query = st.text_input("", placeholder="🔍 검색", label_visibility="collapsed")
 if not df.empty:
-    if search_query:
-        filtered_df = df[df['item_name'].str.contains(search_query, case=False, na=False) | df['author'].str.contains(search_query, case=False, na=False)]
-    else:
-        filtered_df = df
-
-    for index, row in filtered_df.iterrows():
-        with st.container(border=True):
-            # 💡 [핵심] 버튼을 가장 상단(왼쪽)으로 배치
-            col_b1, col_b2, col_info = st.columns([1, 1, 6])
-            with col_b1:
-                if st.button("📝", key=f"m_edit_{row['id']}"):
-                    st.session_state.edit_mode = True
-                    st.session_state.edit_id = row['id']
-                    st.session_state.form_author = row['author']
-                    st.session_state.form_item_name = row['item_name']
-                    st.session_state.form_update = True if row['is_update'] == "Y" else False
-                    st.session_state.form_dtc = True if row['is_dtc'] == "Y" else False
+    target = df[df['item_name'].str.contains(query, na=False) | df['author'].str.contains(query, na=False)] if query else df
+    for _, row in target.iterrows():
+        with st.container():
+            b_col, i_col = st.columns([2, 8])
+            with b_col:
+                cols = st.columns(2)
+                if cols[0].button("📝", key=f"e{row['id']}"):
+                    st.session_state.update({"edit_mode": True, "edit_id": row['id'], "form_author": row['author'], "form_item_name": row['item_name']})
                     st.rerun()
-            with col_b2:
-                if st.button("🗑️", key=f"m_del_{row['id']}"):
-                    confirm_delete_dialog(row['id'], row['item_name'])
-            
-            # 정보는 버튼 아래쪽으로 배치
-            with col_info:
-                st.markdown(f"**{row['item_name']}** / {row['author']}")
-                st.caption(f"🕒 {row['timestamp']} | 업뎃:{row['is_update']} | DTC:{row['is_dtc']}")
-else:
-    st.info("등록된 내역이 없습니다.")
+                if cols[1].button("🗑️", key=f"d{row['id']}"): confirm_delete_dialog(row['id'], row['item_name'])
+            with i_col:
+                st.write(f"**{row['item_name']}** ({row['author']}) / 🕒{row['timestamp']}")
+        st.write("---")
