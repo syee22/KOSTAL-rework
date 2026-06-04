@@ -167,9 +167,7 @@ if "form_dtc" not in st.session_state:
 # --- 7. Streamlit 모바일형 UI 세팅 ---
 st.set_page_config(page_title="KOSTAL Mobile", layout="centered")
 
-# 💡 [초슬림 포인트 1] 거대한 st.title 대신 아주 작은 마크다운 헤더(####)로 축소 및 여백 제거
 st.markdown("#### 📱 KOSTAL 시스템")
-# 💡 [초슬림 포인트 2] 불필요한 안내 문구와 구분선 제거로 즉시 입력 폼 노출
 
 # --- 메인화면 최상단: 데이터 입력/수정 컨트롤 박스 ---
 if st.session_state.edit_mode:
@@ -177,26 +175,23 @@ if st.session_state.edit_mode:
 else:
     st.markdown("##### ✍️ 실시간 현장 등록")
 
-# 💡 [초슬림 포인트 3] 입력창 제목 길이를 최소화하고 autocomplete="name" 속성을 주어 입력 유도
-author = st.text_input("👤 이름/부서", value=st.session_state.form_author, autocomplete="name", placeholder="홍길동/마감")
+# 💡 [보정 포인트] 이름 입력창에서 '부서' 문구를 전면 제거하여 단순화
+author = st.text_input("👤 이름", value=st.session_state.form_author, autocomplete="name", placeholder="이름 입력")
 item_name = st.text_input("📦 VIN 6자리", value=st.session_state.form_item_name, max_chars=6, placeholder="123456")
 
-# 💡 [초슬림 포인트 4] 두 줄로 차지하던 체크박스를 세로 공간을 아끼기 위해 가로 세 칸 배치로 압축
 st.markdown("**🛠️ 체크**")
 col_chk1, col_chk2, col_chk3 = st.columns(3)
 with col_chk1:
     chk_update = st.checkbox("🔄 업뎃", value=st.session_state.form_update)
 with col_chk2:
     chk_dtc = st.checkbox("⚠️ DTC", value=st.session_state.form_dtc)
-# col_chk3는 여백용으로 활용하여 촘촘하게 배치
 
 val_update = "Y" if chk_update else "N"
 val_dtc = "Y" if chk_dtc else "N"
 
-# 📸 카메라 버튼도 간결하게 배치
 uploaded_file = st.file_uploader("📸 현장 사진 촬영/첨부", type=["png", "jpg", "jpeg"])
 
-# 입력 및 수정 제출 버튼 (색상으로 강조하여 크기는 슬림하게 유지)
+# 입력 및 수정 제출 버튼
 if st.session_state.edit_mode:
     col_m_btn1, col_m_btn2 = st.columns(2)
     with col_m_btn1:
@@ -248,9 +243,7 @@ st.write("---")
 # --- 8. 하단 모바일 특화 카드형 리스트 및 제어부 ---
 df = load_data()
 
-# 💡 [초슬림 포인트 5] 하단 현황 제목 크기도 줄임
 st.markdown("##### 📋 마감 현황")
-# 검색창 제목 제거 및 placeholder로 안내
 search_query = st.text_input("", placeholder="🔍 VIN/이름 검색", label_visibility="collapsed")
 
 if not df.empty:
@@ -265,13 +258,11 @@ if not df.empty:
     if filtered_df.empty:
         st.warning("검색 결과가 없습니다.")
     else:
-        # 💡 [초슬림 포인트 6] 카드형 리스트의 테두리 여백을 더 극소화하여 촘촘하게 정렬
         for index, row in filtered_df.iterrows():
-            with st.container(border=False): # border를 없애서 부피 극소화
+            with st.container(border=False):
                 st.markdown(f"**📦 {row['item_name']}** ({row['author']}) / 🕒 {row['timestamp']}")
                 st.caption(f"업뎃: {row['is_update']} | DTC: {row['is_dtc']}")
                 
-                # 버튼 세로는 하나로 통합 (📝, 🗑️)
                 col_b1, col_b2, col_b3 = st.columns([1, 1, 8])
                 with col_b1:
                     if st.button("📝", key=f"m_edit_{row['id']}"):
@@ -285,14 +276,13 @@ if not df.empty:
                 with col_b2:
                     if st.button("🗑️", key=f"m_del_{row['id']}"):
                         confirm_delete_dialog(row['id'], row['item_name'])
-                st.write(" ") # 행간 구분용 아주 작은 여백
+                st.write(" ") 
 else:
     st.info("등록된 내역이 없습니다.")
 
 st.write("---")
 
 # --- 최하단: 다운로드 및 초기화 존 ---
-# 💡 [초슬림 포인트 7] 하단 다운로드 구역 제목 축소 및 구분선 제거
 st.markdown("##### 💾 백업/리셋")
 col_d1, col_d2 = st.columns(2)
 
