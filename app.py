@@ -46,14 +46,14 @@ with st.form("entry_form", clear_on_submit=False):
     chk_u = c1.checkbox("업데이트", value=st.session_state.get("next_upd", False))
     chk_d = c2.checkbox("DTC", value=st.session_state.get("next_dtc", False))
     
-if st.form_submit_button("🚀 등록 / ✅ 수정 완료"):
+    if st.form_submit_button("🚀 등록 / ✅ 수정 완료"):
         st.session_state.current_author = author
         if st.session_state.edit_id:
             update_data(st.session_state.edit_id, author, item_name, "Y" if chk_u else "N", "Y" if chk_d else "N")
         else:
             insert_data(author, item_name, "Y" if chk_u else "N", "Y" if chk_d else "N")
         
-        # --- [이 부분을 확인하여 기존 코드와 교체하세요] ---
+        # 이름 제외한 나머지 항목 리셋
         st.session_state.edit_id = None
         st.session_state.next_vin = ""
         st.session_state.next_upd = False
