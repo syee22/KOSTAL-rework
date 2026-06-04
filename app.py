@@ -72,7 +72,7 @@ def clear_data():
     cursor.execute("DELETE FROM items")
     conn.commit()
 
-# --- 4. 엑셀 파일 내에 사진 저장 함수 (컬럼명 변경 반영) ---
+# --- 4. 엑셀 사진 저장 함수 ---
 def save_image_to_excel(item_name, is_update, is_dtc, uploaded_file):
     excel_filename = "KOSTAL_photo_registry.xlsx"
     
@@ -90,7 +90,6 @@ def save_image_to_excel(item_name, is_update, is_dtc, uploaded_file):
         ws = wb[clean_sheet_name]
     else:
         ws = wb.create_sheet(title=clean_sheet_name)
-        # 💡 [요청 반영] 사진대장 내보내기 헤더 컬럼명 매칭 변경
         ws['A1'] = "시간"
         ws['B1'] = "이름"
         ws['C1'] = "VIN 넘버"
@@ -113,7 +112,6 @@ def save_image_to_excel(item_name, is_update, is_dtc, uploaded_file):
     kst = pytz.timezone('Asia/Seoul')
     full_time = datetime.now(kst).strftime('%Y-%m-%d %H:%M')
     
-    # 데이터 매칭 행 삽입
     ws[f'A{next_row}'] = full_time
     ws[f'B{next_row}'] = st.session_state.form_author
     ws[f'C{next_row}'] = item_name
@@ -169,7 +167,8 @@ if "form_dtc" not in st.session_state:
 # --- 7. Streamlit 모바일형 UI 세팅 ---
 st.set_page_config(page_title="KOSTAL Mobile", layout="centered")
 
-st.title("📱 KOSTAL 리워크 등록 시스템")
+# 💡 [교정 포인트] 거대한 st.title 대신 모바일 가독성을 위해 컴팩트한 마크다운 헤더(##)로 축소 적용
+st.markdown("## 📱 KOSTAL 리워크 등록 시스템")
 st.caption("입력 후 아래 현황 확인 필요")
 st.write("---")
 
@@ -294,7 +293,6 @@ col_d1, col_d2 = st.columns(2)
 
 with col_d1:
     if not df.empty:
-        # 💡 [요청 반영] 일반 리스트 다운로드 시 컬럼명 실시간 한글 매칭 및 순서 재배치
         export_df = df.copy()
         export_df = export_df[['id', 'timestamp', 'author', 'item_name', 'is_update', 'is_dtc']]
         export_df.columns = ['순번', '시간', '이름', 'VIN 넘버', '업데이트', 'DTC']
