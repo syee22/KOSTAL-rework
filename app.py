@@ -69,9 +69,7 @@ s_col, n_col = st.columns([3, 1])
 with s_col:
     search = st.text_input("🔍 이름 또는 VIN 검색")
 with n_col:
-    # 줄 맞춤을 위한 마진 추가
     st.markdown("<br>", unsafe_allow_html=True)
-    
     if search:
         df = df_all[df_all['item_name'].str.contains(search, na=False) | df_all['author'].str.contains(search, na=False)]
     else:
@@ -89,8 +87,12 @@ with b_col:
     if not df.empty:
         df_ex = df.copy()
         df_ex['순번'] = range(1, len(df)+1)
+        # 컬럼명 변경 적용
+        df_ex = df_ex[['순번', 'timestamp', 'author', 'item_name', 'is_update', 'is_dtc']]
+        df_ex.columns = ['순번', '시간', '이름', 'VIN', '업데이트', 'DTC']
+        
         towrite = io.BytesIO()
-        df_ex[['순번', 'timestamp', 'author', 'item_name', 'is_update', 'is_dtc']].to_excel(towrite, index=False)
+        df_ex.to_excel(towrite, index=False)
         st.download_button("📥 엑셀 저장", towrite.getvalue(), "list.xlsx", use_container_width=True)
 
 # 리스트 표시
