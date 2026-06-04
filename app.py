@@ -22,6 +22,15 @@ def update_data(id, a, i, u, d):
 
 # --- UI 설정 ---
 st.set_page_config(page_title="KOSTAL Mobile", layout="centered")
+st.markdown("""
+    <style>
+    div.stButton > button:first-child {
+        padding: 2px 5px;
+        font-size: 12px;
+        height: auto;
+    }
+    </style>
+""", unsafe_allow_html=True)
 st.markdown("#### 📱 KOSTAL 리워크 현황")
 
 # 세션 상태 초기화
@@ -92,12 +101,22 @@ with b_col2:
         st.download_button("📥 상세 사진 저장", towrite_p.getvalue(), "photos.xlsx", use_container_width=True)
 
 # 리스트 표시 (정렬 최적화)
+# 리스트 표시 (모바일 최적화: 텍스트 바로 옆에 작은 버튼 배치)
 for row in df.itertuples():
-    cols = st.columns([7, 1.5, 1.5])
+    # 정보 영역을 크게 잡고, 버튼 영역은 최소한으로 배치
+    cols = st.columns([8, 1, 1])
+    
+    # 정보 표시
     cols[0].markdown(f"<small>{row.timestamp} | **{row.item_name}** | {row.author}<br>UPDATE:{row.is_update} / DTC:{row.is_dtc}</small>", unsafe_allow_html=True)
+    
+    # 수정 버튼 (작은 크기 유지를 위해 스타일 적용)
     if cols[1].button("수정", key=f"e{row.id}", use_container_width=True):
         st.session_state.update({"edit_id": row.id, "current_author": row.author, "next_vin": row.item_name, "next_upd": (row.is_update=='Y'), "next_dtc": (row.is_dtc=='Y')})
         st.rerun()
+    
+    # 삭제 버튼
     if cols[2].button("삭제", key=f"d{row.id}", use_container_width=True):
+        db_manager.delete_all_data_by_vin(conn, row.id, row.item_name)
+        st.rerun()
         db_manager.delete_all_data_by_vin(conn, row.id, row.item_name)
         st.rerun()
