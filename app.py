@@ -83,13 +83,19 @@ else:
 
 st.write("---")
 
-# --- 4. 검색 및 리스트 표시 ---
+# --- 4. 검색 및 결과 반영된 리스트 ---
 df = load_data()
+search = st.text_input("🔍 VIN 또는 이름 검색", placeholder="검색어를 입력하세요")
+if search:
+    df = df[df['item_name'].str.contains(search, na=False) | df['author'].str.contains(search, na=False)]
+
+# 필터링된 데이터 기반의 요약 통계
 upd_count = len(df[df['is_update'] == 'Y'])
 dtc_count = len(df[df['is_dtc'] == 'Y'])
 
 t_col, b_col = st.columns([6, 4])
 with t_col:
+    # 검색된 결과 갯수가 반영된 마감 현황 타이틀
     st.markdown(
         f"##### 📋 KOSTAL 리워크 현황 <span style='color:red; font-size:16px; font-weight:bold;'>({len(df)})</span> "
         f"<span style='color:blue; font-size:12px;'>| 업뎃:{upd_count} | DTC:{dtc_count}</span>", 
@@ -97,7 +103,6 @@ with t_col:
     )
 with b_col:
     if not df.empty:
-        # 삭제 후 반영된 1부터 시작하는 순번 적용
         export_df = df.copy()
         export_df['순번'] = range(1, len(df) + 1)
         export_df = export_df[['순번', 'timestamp', 'author', 'item_name', 'is_update', 'is_dtc']]
@@ -107,10 +112,6 @@ with b_col:
         export_df.to_excel(towrite, index=False, engine="openpyxl")
         towrite.seek(0)
         st.download_button("📥 엑셀 저장", towrite, "KOSTAL_list.xlsx", use_container_width=True)
-
-search = st.text_input("🔍 VIN 또는 이름 검색", placeholder="검색어를 입력하세요")
-if search:
-    df = df[df['item_name'].str.contains(search, na=False) | df['author'].str.contains(search, na=False)]
 
 for _, row in df.iterrows():
     with st.container():
