@@ -190,7 +190,6 @@ val_dtc = "Y" if chk_dtc else "N"
 
 uploaded_file = st.file_uploader("📸 현장 사진 촬영/첨부", type=["png", "jpg", "jpeg"])
 
-# 입력 및 수정 제출 버튼
 if st.session_state.edit_mode:
     col_m_btn1, col_m_btn2 = st.columns(2)
     with col_m_btn1:
@@ -203,7 +202,6 @@ if st.session_state.edit_mode:
                     if uploaded_file is not None:
                         save_image_to_excel(item_name, val_update, val_dtc, uploaded_file)
                     st.toast("수정되었습니다!")
-                    
                     st.session_state.edit_mode = False
                     st.session_state.edit_id = None
                     st.session_state.form_author = author 
@@ -230,7 +228,6 @@ else:
                 if uploaded_file is not None:
                     save_image_to_excel(item_name, val_update, val_dtc, uploaded_file)
                 st.toast("등록되었습니다!")
-                
                 st.session_state.form_author = author
                 st.session_state.form_item_name = ""
                 st.rerun()
@@ -239,92 +236,37 @@ else:
 
 st.write("---")
 
-# --- 8. 하단 모바일 특화 카드형 리스트 및 제어부 ---
+# --- 8. 하단 모바일 특화 카드형 리스트 ---
 df = load_data()
-
 st.markdown("##### 📋 마감 현황")
 search_query = st.text_input("", placeholder="🔍 VIN/이름 검색", label_visibility="collapsed")
 
 if not df.empty:
     if search_query:
-        filtered_df = df[
-            df['item_name'].str.contains(search_query, case=False, na=False) | 
-            df['author'].str.contains(search_query, case=False, na=False)
-        ]
+        filtered_df = df[df['item_name'].str.contains(search_query, case=False, na=False) | df['author'].str.contains(search_query, case=False, na=False)]
     else:
         filtered_df = df
 
-    if filtered_df.empty:
-        st.warning("검색 결과가 없습니다.")
-    else:
-        for index, row in filtered_df.iterrows():
-            with st.container(border=False):
-                # 💡 [버튼 위치 조정] 시간 옆에 버튼 배치
-                col_info1, col_info2 = st.columns([3, 1])
-                with col_info1:
-                    st.markdown(f"**📦 {row['item_name']}** ({row['author']})")
-                with col_info2:
-                    st.write(f"🕒 {row['timestamp']}")
-                
-                # 버튼 레이아웃
-                col_btn1, col_btn2, col_btn3 = st.columns([1, 1, 8])
-                with col_btn1:
-                    if st.button("📝", key=f"m_edit_{row['id']}"):
-                        st.session_state.edit_mode = True
-                        st.session_state.edit_id = row['id']
-                        st.session_state.form_author = row['author']
-                        st.session_state.form_item_name = row['item_name']
-                        st.session_state.form_update = True if row['is_update'] == "Y" else False
-                        st.session_state.form_dtc = True if row['is_dtc'] == "Y" else False
-                        st.rerun()
-                with col_btn2:
-                    if st.button("🗑️", key=f"m_del_{row['id']}"):
-                        confirm_delete_dialog(row['id'], row['item_name'])
-                
-                st.caption(f"업데이트: {row['is_update']} | DTC: {row['is_dtc']}")
-                st.write(" ") 
+    for index, row in filtered_df.iterrows():
+        with st.container(border=True):
+            # 💡 [핵심] 버튼을 가장 상단(왼쪽)으로 배치
+            col_b1, col_b2, col_info = st.columns([1, 1, 6])
+            with col_b1:
+                if st.button("📝", key=f"m_edit_{row['id']}"):
+                    st.session_state.edit_mode = True
+                    st.session_state.edit_id = row['id']
+                    st.session_state.form_author = row['author']
+                    st.session_state.form_item_name = row['item_name']
+                    st.session_state.form_update = True if row['is_update'] == "Y" else False
+                    st.session_state.form_dtc = True if row['is_dtc'] == "Y" else False
+                    st.rerun()
+            with col_b2:
+                if st.button("🗑️", key=f"m_del_{row['id']}"):
+                    confirm_delete_dialog(row['id'], row['item_name'])
+            
+            # 정보는 버튼 아래쪽으로 배치
+            with col_info:
+                st.markdown(f"**{row['item_name']}** / {row['author']}")
+                st.caption(f"🕒 {row['timestamp']} | 업뎃:{row['is_update']} | DTC:{row['is_dtc']}")
 else:
     st.info("등록된 내역이 없습니다.")
-
-st.write("---")
-
-# --- 최하단: 다운로드 및 초기화 존 ---
-st.markdown("##### 💾 백업/리셋")
-col_d1, col_d2 = st.columns(2)
-
-with col_d1:
-    if not df.empty:
-        export_df = df.copy()
-        export_df = export_df[['id', 'timestamp', 'author', 'item_name', 'is_update', 'is_dtc']]
-        export_df.columns = ['순번', '시간', '이름', 'VIN 넘버', '업데이트', 'DTC']
-        
-        towrite = io.BytesIO()
-        export_df.to_excel(towrite, index=False, engine="openpyxl")
-        towrite.seek(0)
-        st.download_button(
-            label="📈 일반 저장",
-            data=towrite,
-            file_name="KOSTAL_rework_list.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            use_container_width=True
-        )
-
-with col_d2:
-    if os.path.exists("KOSTAL_photo_registry.xlsx"):
-        with open("KOSTAL_photo_registry.xlsx", "rb") as f:
-            st.download_button(
-                label="📸 사진 저장",
-                data=f,
-                file_name="KOSTAL_photo_registry.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                use_container_width=True
-            )
-
-if st.button("🚨 전체 마감 리셋", use_container_width=True):
-    clear_data()
-    if os.path.exists("KOSTAL_photo_registry.xlsx"):
-        os.remove("KOSTAL_photo_registry.xlsx")
-    st.session_state.edit_mode = False
-    st.session_state.form_author = "" 
-    st.session_state.form_item_name = ""
-    st.rerun()
