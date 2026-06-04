@@ -72,7 +72,7 @@ def clear_data():
     cursor.execute("DELETE FROM items")
     conn.commit()
 
-# --- 4. 엑셀 파일 내에 사진 저장 함수 ---
+# --- 4. 엑셀 파일 내에 사진 저장 함수 (컬럼명 변경 반영) ---
 def save_image_to_excel(item_name, is_update, is_dtc, uploaded_file):
     excel_filename = "KOSTAL_photo_registry.xlsx"
     
@@ -84,17 +84,19 @@ def save_image_to_excel(item_name, is_update, is_dtc, uploaded_file):
         
     clean_sheet_name = "".join(c for c in item_name if c not in r'\/??*[]:').strip()[:30]
     if not clean_sheet_name:
-        clean_sheet_name = "정제된_품목명"
+        clean_sheet_name = "정제된_VIN"
         
     if clean_sheet_name in wb.sheetnames:
         ws = wb[clean_sheet_name]
     else:
         ws = wb.create_sheet(title=clean_sheet_name)
-        ws['A1'] = "등록 시간"
-        ws['B1'] = "품목명"
-        ws['C1'] = "업데이트 여부"
-        ws['D1'] = "DTC 여부"
-        ws['E1'] = "첨부 사진"
+        # 💡 [요청 반영] 사진대장 내보내기 헤더 컬럼명 매칭 변경
+        ws['A1'] = "시간"
+        ws['B1'] = "이름"
+        ws['C1'] = "VIN 넘버"
+        ws['D1'] = "업데이트"
+        ws['E1'] = "DTC"
+        ws['F1'] = "첨부 사진"
         
     image = Image.open(uploaded_file)
     image.thumbnail((400, 400))
@@ -106,18 +108,21 @@ def save_image_to_excel(item_name, is_update, is_dtc, uploaded_file):
     img_byte_arr.seek(0)
     
     xl_img = OpenpyxlImage(img_byte_arr)
-    next_row = ws.max_row + 1 if ws.max_row > 1 or ws['A1'].value != "등록 시간" else 2
+    next_row = ws.max_row + 1 if ws.max_row > 1 or ws['A1'].value != "시간" else 2
     
     kst = pytz.timezone('Asia/Seoul')
     full_time = datetime.now(kst).strftime('%Y-%m-%d %H:%M')
-    ws[f'A{next_row}'] = full_time
-    ws[f'B{next_row}'] = item_name
-    ws[f'C{next_row}'] = is_update
-    ws[f'D{next_row}'] = is_dtc
     
-    ws.add_image(xl_img, f'E{next_row}')
+    # 데이터 매칭 행 삽입
+    ws[f'A{next_row}'] = full_time
+    ws[f'B{next_row}'] = st.session_state.form_author
+    ws[f'C{next_row}'] = item_name
+    ws[f'D{next_row}'] = is_update
+    ws[f'E{next_row}'] = is_dtc
+    
+    ws.add_image(xl_img, f'F{next_row}')
     ws.row_dimensions[next_row].height = 160  
-    ws.column_dimensions['E'].width = 45
+    ws.column_dimensions['F'].width = 45
     
     if "임시_기본시트" in wb.sheetnames and len(wb.sheetnames) > 1:
         del wb["임시_기본시트"]
@@ -128,7 +133,7 @@ def save_image_to_excel(item_name, is_update, is_dtc, uploaded_file):
 # --- 5. 모달 팝업(Dialog) 정의 ---
 @st.dialog("⚠️ 데이터 삭제 확인")
 def confirm_delete_dialog(item_id, item_name):
-    st.write(f"정말로 품목명 **[{item_name}]** 항목을 삭제하시겠습니까?")
+    st.write(f"정말로 VIN 넘버 **[{item_name}]** 항목을 삭제하시겠습니까?")
     st.write("")
     col_pop1, col_pop2 = st.columns(2)
     with col_pop1:
@@ -143,7 +148,7 @@ def confirm_delete_dialog(item_id, item_name):
 @st.dialog("🚨 입력 오류")
 def validation_error_dialog(message):
     st.error(message)
-    st.write("품목명은 **숫자 6자리**를 정확히 입력해 주세요.")
+    st.write("VIN 넘버 자리에 **숫자 6자리**를 정확히 입력해 주세요.")
     if st.button("확인", use_container_width=True):
         st.rerun()
 
@@ -174,9 +179,8 @@ if st.session_state.edit_mode:
 else:
     st.markdown("### ✍️ 실시간 현장 등록")
 
-# 💡 [보정 포인트 1] autocomplete="name" 속성을 주어 모바일 브라우저의 최근 입력 자동완성을 유도합니다.
 author = st.text_input("👤 작성자 (이름 / 부서)", value=st.session_state.form_author, autocomplete="name")
-item_name = st.text_input("📦 품목명 (숫자 6자리 필수 입력)", value=st.session_state.form_item_name, max_chars=6)
+item_name = st.text_input("📦 VIN 넘버 (숫자 6자리 필수 입력)", value=st.session_state.form_item_name, max_chars=6)
 
 st.markdown("**🛠️ 현장 체크 체크사항**")
 col_chk1, col_chk2 = st.columns(2)
@@ -199,14 +203,13 @@ if st.session_state.edit_mode:
         if st.button("✅ 수정 완료", type="primary", use_container_width=True):
             if author and item_name:
                 if not item_name.isdigit() or len(item_name) != 6:
-                    validation_error_dialog(f"품목명 형식이 잘못되었습니다.")
+                    validation_error_dialog(f"형식이 잘못되었습니다.")
                 else:
                     update_data(st.session_state.edit_id, author, item_name, val_update, val_dtc)
                     if uploaded_file is not None:
                         save_image_to_excel(item_name, val_update, val_dtc, uploaded_file)
                     st.toast("수정되었습니다!")
                     
-                    # 💡 [보정 포인트 2] 수정 완료 후에도 이름(author)은 지워지지 않도록 세션 유지
                     st.session_state.edit_mode = False
                     st.session_state.edit_id = None
                     st.session_state.form_author = author 
@@ -227,19 +230,18 @@ else:
     if st.button("🚀 현장 리스트에 즉시 등록", type="primary", use_container_width=True):
         if author and item_name:
             if not item_name.isdigit() or len(item_name) != 6:
-                validation_error_dialog(f"품목명은 반드시 숫자 6자리여야 합니다.")
+                validation_error_dialog(f"VIN 넘버는 반드시 숫자 6자리여야 합니다.")
             else:
                 insert_data(author, item_name, val_update, val_dtc)
                 if uploaded_file is not None:
                     save_image_to_excel(item_name, val_update, val_dtc, uploaded_file)
                 st.toast("리스트에 추가되었습니다!")
                 
-                # 💡 [보정 포인트 3] 등록 완료 후 연속 입력을 위해 이름(author) 상태값은 유지하고 품목명만 클리어
                 st.session_state.form_author = author
                 st.session_state.form_item_name = ""
                 st.rerun()
         else:
-            st.error("작성자와 품목명은 필수 입력 항목입니다.")
+            st.error("작성자와 VIN 넘버는 필수 입력 항목입니다.")
 
 st.write("---")
 
@@ -247,7 +249,7 @@ st.write("---")
 df = load_data()
 
 st.markdown("### 📋 마감 데이터 현황")
-search_query = st.text_input("🔍 품목명/작성자 검색", "")
+search_query = st.text_input("🔍 VIN 넘버/작성자 검색", "")
 
 if not df.empty:
     if search_query:
@@ -265,7 +267,7 @@ if not df.empty:
             with st.container(border=True):
                 col_c1, col_c2 = st.columns([4, 1])
                 with col_c1:
-                    st.markdown(f"**📦 품목: {row['item_name']}** ({row['author']})")
+                    st.markdown(f"**📦 VIN: {row['item_name']}** ({row['author']})")
                     st.caption(f"🕒 {row['timestamp']} | 업데이트: {row['is_update']} | DTC: {row['is_dtc']}")
                 with col_c2:
                     col_b1, col_b2 = st.columns(2)
@@ -292,8 +294,13 @@ col_d1, col_d2 = st.columns(2)
 
 with col_d1:
     if not df.empty:
+        # 💡 [요청 반영] 일반 리스트 다운로드 시 컬럼명 실시간 한글 매칭 및 순서 재배치
+        export_df = df.copy()
+        export_df = export_df[['id', 'timestamp', 'author', 'item_name', 'is_update', 'is_dtc']]
+        export_df.columns = ['순번', '시간', '이름', 'VIN 넘버', '업데이트', 'DTC']
+        
         towrite = io.BytesIO()
-        df.to_excel(towrite, index=False, engine="openpyxl")
+        export_df.to_excel(towrite, index=False, engine="openpyxl")
         towrite.seek(0)
         st.download_button(
             label="📈 일반 리스트 국문 저장",
@@ -320,6 +327,6 @@ if st.button("🚨 마감 작업 전체 초기화 (Reset)", use_container_width=
     if os.path.exists("KOSTAL_photo_registry.xlsx"):
         os.remove("KOSTAL_photo_registry.xlsx")
     st.session_state.edit_mode = False
-    st.session_state.form_author = "" # 전체 초기화 시에만 작성자 칸 클리어
+    st.session_state.form_author = "" 
     st.session_state.form_item_name = ""
     st.rerun()
