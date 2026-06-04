@@ -83,14 +83,16 @@ u_cnt, d_cnt = len(df[df['is_update'] == 'Y']), len(df[df['is_dtc'] == 'Y'])
 t_col, b_col1, b_col2 = st.columns([4, 3, 3])
 with t_col:
     st.markdown(f"##### 📋 {len(df)}건 <small>| 업뎃:{u_cnt} | DTC:{d_cnt}</small>", unsafe_allow_html=True)
+
 with b_col1:
     df_ex = df.copy()
     df_ex['순번'] = range(1, len(df)+1)
     towrite = io.BytesIO()
     df_ex[['순번', 'timestamp', 'author', 'item_name', 'is_update', 'is_dtc']].to_excel(towrite, index=False)
     st.download_button("📥 VIN 현황 저장", towrite.getvalue(), "list.xlsx", use_container_width=True)
+
 with b_col2:
-    if st.button("📥 사진 데이터 준비", use_container_width=True):
+    def create_photos_excel():
         towrite_p = io.BytesIO()
         with pd.ExcelWriter(towrite_p, engine='xlsxwriter') as writer:
             for vin in df['item_name'].unique():
@@ -99,7 +101,9 @@ with b_col2:
                     sheet = writer.book.add_worksheet(name=str(vin))
                     for idx, (img_data,) in enumerate(photos):
                         sheet.insert_image(chr(66+(idx*10))+'2', 'photo.png', {'image_data': io.BytesIO(img_data), 'x_scale': 0.3, 'y_scale': 0.3})
-        st.download_button("📥 상세 사진 저장", towrite_p.getvalue(), "photos.xlsx", use_container_width=True)
+        return towrite_p.getvalue()
+
+    st.download_button("📥 상세 사진 다운로드", data=create_photos_excel(), file_name="photos.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True)
 
 # 리스트 표시 (텍스트 링크로 가로 정렬)
 for row in df.itertuples():
