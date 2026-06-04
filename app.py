@@ -83,9 +83,14 @@ else:
 
 st.write("---")
 
-# 현황 리스트
+# --- 4. 검색 및 리스트 표시 ---
 df = load_data()
 st.markdown(f"##### 📋 마감 현황 <span style='color:red; font-size:16px; font-weight:bold;'>({len(df)})</span>", unsafe_allow_html=True)
+
+# 검색창
+search = st.text_input("🔍 VIN 또는 이름 검색", placeholder="검색어를 입력하세요")
+if search:
+    df = df[df['item_name'].str.contains(search, na=False) | df['author'].str.contains(search, na=False)]
 
 for _, row in df.iterrows():
     with st.container():
@@ -106,7 +111,7 @@ for _, row in df.iterrows():
                 st.rerun()
     st.write("---")
 
-# --- 4. 하단 다운로드 및 리셋 ---
+# --- 5. 하단 다운로드 및 리셋 ---
 st.markdown("##### 💾 백업 및 리셋")
 col_d1, col_d2 = st.columns(2)
 
