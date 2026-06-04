@@ -5,9 +5,6 @@ import io
 import os
 from datetime import datetime
 import pytz
-from PIL import Image
-import openpyxl
-from openpyxl.drawing.image import Image as OpenpyxlImage
 
 # --- 1. 데이터베이스 초기화 ---
 def init_db():
@@ -58,87 +55,57 @@ def clear_data():
 st.set_page_config(page_title="KOSTAL Mobile", layout="centered")
 st.markdown("#### 📱 KOSTAL 리워크 현황")
 
-if "edit_mode" not in st.session_state: st.session_state.edit_mode = False
+# 수정 모드용 상태 관리
+if "edit_id" not in st.session_state: st.session_state.edit_id = None
 
-# 입력 폼
-author = st.text_input("이름", value=st.session_state.get("form_author", ""), key="main_author")
-item_name = st.text_input("VIN 6자리", value=st.session_state.get("form_item_name", ""), max_chars=6, key="main_vin")
+# 수정 버튼 클릭 처리 (루프 밖에서 처리)
+def enter_edit_mode(row):
+    st.session_state.edit_id = row['id']
+    st.session_state.edit_author = row['author']
+    st.session_state.edit_item = row['item_name']
+    st.session_state.edit_upd = (row['is_update'] == 'Y')
+    st.session_state.edit_dtc = (row['is_dtc'] == 'Y')
 
-c1, c2 = st.columns(2)
-chk_update = c1.checkbox("업데이트", value=st.session_state.get("form_update", False), key="main_upd")
-chk_dtc = c2.checkbox("DTC", value=st.session_state.get("form_dtc", False), key="main_dtc")
-
-uploaded_file = st.file_uploader("📸 현장 사진 촬영/첨부", type=["png", "jpg", "jpeg"])
-
-if st.session_state.edit_mode:
-    if st.button("✅ 수정 완료", type="primary", use_container_width=True):
-        update_data(st.session_state.edit_id, author, item_name, "Y" if chk_update else "N", "Y" if chk_dtc else "N")
-        st.session_state.update({"edit_mode": False, "form_author": "", "form_item_name": "", "form_update": False, "form_dtc": False})
-        st.rerun()
-else:
-    if st.button("🚀 등록", type="primary", use_container_width=True):
-        insert_data(author, item_name, "Y" if chk_update else "N", "Y" if chk_dtc else "N")
-        st.session_state.update({"form_author": "", "form_item_name": "", "form_update": False, "form_dtc": False})
+# 입력 폼 (수정 모드일 때만 데이터 채움)
+with st.form("entry_form", clear_on_submit=True):
+    author = st.text_input("이름", value=st.session_state.get("edit_author", ""))
+    item_name = st.text_input("VIN 6자리", value=st.session_state.get("edit_item", ""), max_chars=6)
+    c1, c2 = st.columns(2)
+    chk_update = c1.checkbox("업데이트", value=st.session_state.get("edit_upd", False))
+    chk_dtc = c2.checkbox("DTC", value=st.session_state.get("edit_dtc", False))
+    
+    submit_btn = st.form_submit_button("🚀 등록 / ✅ 수정 완료")
+    
+    if submit_btn:
+        if st.session_state.edit_id:
+            update_data(st.session_state.edit_id, author, item_name, "Y" if chk_update else "N", "Y" if chk_dtc else "N")
+            st.session_state.edit_id = None # 수정 완료 후 ID 초기화
+        else:
+            insert_data(author, item_name, "Y" if chk_update else "N", "Y" if chk_dtc else "N")
         st.rerun()
 
 st.write("---")
 
-# --- 4. 검색 및 결과 반영된 리스트 ---
+# 리스트 표시
 df = load_data()
-search = st.text_input("🔍 VIN 또는 이름 검색", placeholder="검색어를 입력하세요")
-if search:
+if search := st.text_input("🔍 VIN 또는 이름 검색"):
     df = df[df['item_name'].str.contains(search, na=False) | df['author'].str.contains(search, na=False)]
 
-# 필터링된 데이터 기반의 요약 통계
+# ... (타이틀 및 개수 표시 로직 동일) ...
 upd_count = len(df[df['is_update'] == 'Y'])
 dtc_count = len(df[df['is_dtc'] == 'Y'])
 
-t_col, b_col = st.columns([6, 4])
-with t_col:
-    # 검색된 결과 갯수가 반영된 마감 현황 타이틀
-    st.markdown(
-        f"##### 📋 KOSTAL 리워크 현황 <span style='color:red; font-size:16px; font-weight:bold;'>({len(df)})</span> "
-        f"<span style='color:blue; font-size:12px;'>| 업뎃:{upd_count} | DTC:{dtc_count}</span>", 
-        unsafe_allow_html=True
-    )
-with b_col:
-    if not df.empty:
-        export_df = df.copy()
-        export_df['순번'] = range(1, len(df) + 1)
-        export_df = export_df[['순번', 'timestamp', 'author', 'item_name', 'is_update', 'is_dtc']]
-        export_df.columns = ['순번', '시간', '이름', 'VIN 넘버', '업데이트', 'DTC']
-        
-        towrite = io.BytesIO()
-        export_df.to_excel(towrite, index=False, engine="openpyxl")
-        towrite.seek(0)
-        st.download_button("📥 엑셀 저장", towrite, "KOSTAL_list.xlsx", use_container_width=True)
+st.markdown(f"##### 📋 KOSTAL 리워크 현황 ({len(df)}) | 업뎃:{upd_count} | DTC:{dtc_count}")
 
 for _, row in df.iterrows():
-    with st.container():
-        cols = st.columns([5, 2.5, 2.5])
-        with cols[0]:
-            st.markdown(f"**{row['item_name']}**<br>{row['author']}", unsafe_allow_html=True)
-        with cols[1]:
-            if st.button("수정", key=f"btn_e_{row['id']}", use_container_width=True):
-                st.session_state.update({
-                    "edit_mode": True, "edit_id": row['id'], 
-                    "form_author": row['author'], "form_item_name": row['item_name'], 
-                    "form_update": (row['is_update']=="Y"), "form_dtc": (row['is_dtc']=="Y")
-                })
-                st.rerun()
-        with cols[2]:
-            if st.button("삭제", key=f"btn_d_{row['id']}", use_container_width=True):
-                delete_data(row['id'])
-                st.rerun()
-    st.write("---")
-
-# --- 5. 하단 기타 기능 ---
-st.markdown("##### 💾 데이터 관리")
-if os.path.exists("KOSTAL_photo_registry.xlsx"):
-    with open("KOSTAL_photo_registry.xlsx", "rb") as f:
-        st.download_button("📸 사진 데이터 저장", f, "KOSTAL_photo_registry.xlsx", use_container_width=True)
-
-if st.button("🚨 전체 마감 리셋", use_container_width=True):
-    clear_data()
-    if os.path.exists("KOSTAL_photo_registry.xlsx"): os.remove("KOSTAL_photo_registry.xlsx")
-    st.rerun()
+    cols = st.columns([5, 2.5, 2.5])
+    with cols[0]:
+        st.write(f"**{row['item_name']}** / {row['author']}")
+    with cols[1]:
+        if st.button("수정", key=f"e{row['id']}"):
+            enter_edit_mode(row)
+            st.rerun()
+    with cols[2]:
+        if st.button("삭제", key=f"d{row['id']}"):
+            delete_data(row['id'])
+            st.rerun()
