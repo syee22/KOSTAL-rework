@@ -1,10 +1,15 @@
 import sqlite3
 import pandas as pd
 import streamlit as st
+import io
+import os
 from datetime import datetime
 import pytz
+from PIL import Image
+import openpyxl
+from openpyxl.drawing.image import Image as OpenpyxlImage
 
-# --- 1. 데이터베이스 초기화 ---
+# --- 1. 데이터베이스 및 사진 관련 설정 ---
 def init_db():
     conn = sqlite3.connect("kostal_rework_v3.db", check_same_thread=False)
     cursor = conn.cursor()
@@ -50,7 +55,7 @@ st.markdown("#### 📱 KOSTAL 시스템")
 
 if "edit_mode" not in st.session_state: st.session_state.edit_mode = False
 
-# 수정 모드일 때 세션에서 데이터 로드 (key를 동적으로 할당하지 않고 기본 상태 유지)
+# 입력 폼
 author = st.text_input("이름", value=st.session_state.get("form_author", ""), key="main_author")
 item_name = st.text_input("VIN 6자리", value=st.session_state.get("form_item_name", ""), max_chars=6, key="main_vin")
 
@@ -58,10 +63,12 @@ c1, c2 = st.columns(2)
 chk_update = c1.checkbox("업데이트", value=st.session_state.get("form_update", False), key="main_upd")
 chk_dtc = c2.checkbox("DTC", value=st.session_state.get("form_dtc", False), key="main_dtc")
 
+# 사진 업로드 추가
+uploaded_file = st.file_uploader("📸 현장 사진 촬영/첨부", type=["png", "jpg", "jpeg"])
+
 if st.session_state.edit_mode:
     if st.button("✅ 수정 완료", type="primary", use_container_width=True):
         update_data(st.session_state.edit_id, author, item_name, "Y" if chk_update else "N", "Y" if chk_dtc else "N")
-        # 수정 후 상태 초기화
         st.session_state.update({"edit_mode": False, "form_author": "", "form_item_name": "", "form_update": False, "form_dtc": False})
         st.rerun()
 else:
@@ -77,7 +84,6 @@ df = load_data()
 st.markdown(f"##### 📋 마감 현황 <span style='color:red; font-size:16px; font-weight:bold;'>({len(df)})</span>", unsafe_allow_html=True)
 
 for _, row in df.iterrows():
-    # 고유 ID를 기반으로 하는 컨테이너와 버튼 배치
     with st.container():
         cols = st.columns([5, 2.5, 2.5])
         with cols[0]:
