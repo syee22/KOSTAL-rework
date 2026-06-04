@@ -34,7 +34,7 @@ conn = init_db()
 def get_current_kst_time():
     kst = pytz.timezone('Asia/Seoul')
     now = datetime.now(kst)
-    return now.strftime('%m-%d %H:%M') # 모바일 가독성을 위해 월-일 시:분으로 축소
+    return now.strftime('%m-%d %H:%M')
 
 # --- 3. 데이터베이스 조작 함수들 ---
 def insert_data(author, item_name, is_update, is_dtc):
@@ -162,7 +162,7 @@ if "form_dtc" not in st.session_state:
     st.session_state.form_dtc = False
 
 # --- 7. Streamlit 모바일형 UI 세팅 ---
-st.set_page_config(page_title="KOSTAL Mobile", layout="centered") # centered로 모바일 맞춤 정렬
+st.set_page_config(page_title="KOSTAL Mobile", layout="centered")
 
 st.title("📱 KOSTAL 현장 마감 시스템")
 st.caption("모바일 한 손 조작에 최적화된 인터페이스입니다.")
@@ -174,11 +174,10 @@ if st.session_state.edit_mode:
 else:
     st.markdown("### ✍️ 실시간 현장 등록")
 
-# 한 손 터치가 용이하도록 입력창을 큼직하게 배치
-author = st.text_input("👤 작성자 (이름 / 부서)", value=st.session_state.form_author)
-item_name = st.text_input("📦 품목명 (숫자 6자리 필숫 입력)", value=st.session_state.form_item_name, max_chars=6)
+# 💡 [보정 포인트 1] autocomplete="name" 속성을 주어 모바일 브라우저의 최근 입력 자동완성을 유도합니다.
+author = st.text_input("👤 작성자 (이름 / 부서)", value=st.session_state.form_author, autocomplete="name")
+item_name = st.text_input("📦 품목명 (숫자 6자리 필수 입력)", value=st.session_state.form_item_name, max_chars=6)
 
-# 모바일 조작용 대형 체크버튼(세로 2분할 배치)
 st.markdown("**🛠️ 현장 체크 체크사항**")
 col_chk1, col_chk2 = st.columns(2)
 with col_chk1:
@@ -189,12 +188,11 @@ with col_chk2:
 val_update = "Y" if chk_update else "N"
 val_dtc = "Y" if chk_dtc else "N"
 
-# 카메라/파일 업로더 배치
 uploaded_file = st.file_uploader("📸 현장 증빙 사진 촬영/첨부", type=["png", "jpg", "jpeg"])
 
 st.write(" ")
 
-# 입력 및 수정 제출 버튼 (모바일 화면 꽉 차게 커스텀)
+# 입력 및 수정 제출 버튼
 if st.session_state.edit_mode:
     col_m_btn1, col_m_btn2 = st.columns(2)
     with col_m_btn1:
@@ -207,9 +205,11 @@ if st.session_state.edit_mode:
                     if uploaded_file is not None:
                         save_image_to_excel(item_name, val_update, val_dtc, uploaded_file)
                     st.toast("수정되었습니다!")
+                    
+                    # 💡 [보정 포인트 2] 수정 완료 후에도 이름(author)은 지워지지 않도록 세션 유지
                     st.session_state.edit_mode = False
                     st.session_state.edit_id = None
-                    st.session_state.form_author = ""
+                    st.session_state.form_author = author 
                     st.session_state.form_item_name = ""
                     st.session_state.form_update = False
                     st.session_state.form_dtc = False
@@ -218,7 +218,7 @@ if st.session_state.edit_mode:
         if st.button("❌ 취소", use_container_width=True):
             st.session_state.edit_mode = False
             st.session_state.edit_id = None
-            st.session_state.form_author = ""
+            st.session_state.form_author = author
             st.session_state.form_item_name = ""
             st.session_state.form_update = False
             st.session_state.form_dtc = False
@@ -233,7 +233,9 @@ else:
                 if uploaded_file is not None:
                     save_image_to_excel(item_name, val_update, val_dtc, uploaded_file)
                 st.toast("리스트에 추가되었습니다!")
-                # 다음 입력을 위해 품목명만 비워주기 (연속 입력 배려)
+                
+                # 💡 [보정 포인트 3] 등록 완료 후 연속 입력을 위해 이름(author) 상태값은 유지하고 품목명만 클리어
+                st.session_state.form_author = author
                 st.session_state.form_item_name = ""
                 st.rerun()
         else:
@@ -259,15 +261,13 @@ if not df.empty:
     if filtered_df.empty:
         st.warning("검색 결과가 없습니다.")
     else:
-        # 모바일용 가로 압축 리스트 표현 (표 대신 콤팩트 줄 정렬)
         for index, row in filtered_df.iterrows():
-            with st.container(border=True): # 아이템별 카드 테두리 감싸기
+            with st.container(border=True):
                 col_c1, col_c2 = st.columns([4, 1])
                 with col_c1:
                     st.markdown(f"**📦 품목: {row['item_name']}** ({row['author']})")
                     st.caption(f"🕒 {row['timestamp']} | 업데이트: {row['is_update']} | DTC: {row['is_dtc']}")
                 with col_c2:
-                    # 버튼 공간 확보용 서브 컬럼
                     col_b1, col_b2 = st.columns(2)
                     with col_b1:
                         if st.button("📝", key=f"m_edit_{row['id']}"):
@@ -286,7 +286,7 @@ else:
 
 st.write("---")
 
-# --- 최하단: 모바일용 다운로드 및 초기화 존 ---
+# --- 최하단: 다운로드 및 초기화 존 ---
 st.markdown("### 💾 마감 백업 및 마감 리셋")
 col_d1, col_d2 = st.columns(2)
 
@@ -320,4 +320,6 @@ if st.button("🚨 마감 작업 전체 초기화 (Reset)", use_container_width=
     if os.path.exists("KOSTAL_photo_registry.xlsx"):
         os.remove("KOSTAL_photo_registry.xlsx")
     st.session_state.edit_mode = False
+    st.session_state.form_author = "" # 전체 초기화 시에만 작성자 칸 클리어
+    st.session_state.form_item_name = ""
     st.rerun()
