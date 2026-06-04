@@ -37,14 +37,17 @@ st.markdown("#### 📱 KOSTAL 리워크 현황")
 # 세션 상태 초기화
 if "edit_id" not in st.session_state: st.session_state.edit_id = None
 if "current_author" not in st.session_state: st.session_state.current_author = ""
+if "next_vin" not in st.session_state: st.session_state.next_vin = ""
+if "next_upd" not in st.session_state: st.session_state.next_upd = False
+if "next_dtc" not in st.session_state: st.session_state.next_dtc = False
 
 # 입력 폼
 with st.form("entry_form", clear_on_submit=False):
     author = st.text_input("이름", value=st.session_state.current_author)
-    item_name = st.text_input("VIN 6자리", value=st.session_state.get("next_vin", ""), max_chars=6)
+    item_name = st.text_input("VIN 6자리", value=st.session_state.next_vin, max_chars=6)
     c1, c2 = st.columns(2)
-    chk_u = c1.checkbox("업데이트", value=st.session_state.get("next_upd", False))
-    chk_d = c2.checkbox("DTC", value=st.session_state.get("next_dtc", False))
+    chk_u = c1.checkbox("업데이트", value=st.session_state.next_upd)
+    chk_d = c2.checkbox("DTC", value=st.session_state.next_dtc)
     
     if st.form_submit_button("🚀 등록 / ✅ 수정 완료"):
         st.session_state.current_author = author
@@ -53,7 +56,7 @@ with st.form("entry_form", clear_on_submit=False):
         else:
             insert_data(author, item_name, "Y" if chk_u else "N", "Y" if chk_d else "N")
         
-        # 이름 제외한 나머지 항목 리셋
+        # 입력 항목 리셋
         st.session_state.edit_id = None
         st.session_state.next_vin = ""
         st.session_state.next_upd = False
@@ -101,7 +104,13 @@ for row in df.itertuples():
         st.markdown(info_text, unsafe_allow_html=True)
     with cols[1]:
         if st.button("수정", key=f"e{row.id}", use_container_width=True):
-            st.session_state.update({"edit_id": row.id, "current_author": row.author, "next_vin": row.item_name, "next_upd": (row.is_update=='Y'), "next_dtc": (row.is_dtc=='Y')})
+            st.session_state.update({
+                "edit_id": row.id, 
+                "current_author": row.author, 
+                "next_vin": row.item_name, 
+                "next_upd": (row.is_update=='Y'), 
+                "next_dtc": (row.is_dtc=='Y')
+            })
             st.rerun()
     with cols[2]:
         if st.button("삭제", key=f"d{row.id}", use_container_width=True):
