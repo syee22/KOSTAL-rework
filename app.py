@@ -5,8 +5,11 @@ import io
 import os
 from datetime import datetime
 import pytz
+from PIL import Image
+import openpyxl
+from openpyxl.drawing.image import Image as OpenpyxlImage
 
-# --- 데이터베이스 및 기본 함수 ---
+# --- 1. 데이터베이스 초기화 ---
 def init_db():
     conn = sqlite3.connect("kostal_rework_v3.db", check_same_thread=False)
     cursor = conn.cursor()
@@ -22,6 +25,7 @@ def init_db():
 
 conn = init_db()
 
+# --- 2. 기본 함수 ---
 def get_current_kst_time():
     return datetime.now(pytz.timezone('Asia/Seoul')).strftime('%m-%d %H:%M')
 
@@ -45,8 +49,8 @@ def delete_data(item_id):
 def load_data():
     return pd.read_sql_query("SELECT * FROM items ORDER BY id DESC", conn)
 
-# --- UI 및 상태 관리 ---
-st.set_page_config(page_title="KOSTAL", layout="centered")
+# --- 3. UI 및 상태 관리 ---
+st.set_page_config(page_title="KOSTAL Mobile", layout="centered")
 st.markdown("#### 📱 KOSTAL 시스템")
 
 if "edit_mode" not in st.session_state: st.session_state.edit_mode = False
@@ -70,26 +74,28 @@ else:
 
 st.write("---")
 
-# 현황 리스트 (내용 - 수정 - 삭제 정렬)
+# 현황 리스트 (내용 - 수정 - 삭제 한 줄 정렬)
 df = load_data()
 st.markdown("##### 📋 마감 현황")
 
 for _, row in df.iterrows():
-    # 컬럼 비율: 정보(6) + 수정버튼(2) + 삭제버튼(2)
-    cols = st.columns([6, 2, 2])
+    # 정보(5) + 수정버튼(2.5) + 삭제버튼(2.5) 비율로 강제 고정
+    cols = st.columns([5, 2.5, 2.5])
     
     with cols[0]:
-        # 정보 표시 (한 줄)
-        st.write(f"**{row['item_name']}** ({row['author']})")
+        # 이름을 굵게 표시하여 가독성 향상
+        st.markdown(f"**{row['item_name']}**<br>{row['author']}", unsafe_allow_html=True)
     with cols[1]:
-        # 수정 버튼
-        if st.button("수정", key=f"e{row['id']}"):
-            st.session_state.update({"edit_mode": True, "edit_id": row['id'], "form_author": row['author'], 
-                                     "form_item_name": row['item_name'], "form_update": (row['is_update']=="Y"), 
-                                     "form_dtc": (row['is_dtc']=="Y")})
+        if st.button("수정", key=f"e{row['id']}", use_container_width=True):
+            st.session_state.update({
+                "edit_mode": True, "edit_id": row['id'], 
+                "form_author": row['author'], "form_item_name": row['item_name'], 
+                "form_update": (row['is_update']=="Y"), "form_dtc": (row['is_dtc']=="Y")
+            })
             st.rerun()
     with cols[2]:
-        # 삭제 버튼
-        if st.button("삭제", key=f"d{row['id']}"):
+        if st.button("삭제", key=f"d{row['id']}", use_container_width=True):
             delete_data(row['id'])
             st.rerun()
+    
+    st.write("---")
