@@ -3,7 +3,7 @@ import pandas as pd
 import io
 import pytz
 from datetime import datetime
-import db_manager  # 같은 폴더에 db_manager.py가 있어야 합니다.
+import db_manager  # 프로젝트 폴더 내 db_manager.py 필요
 
 # DB 연결
 conn = db_manager.init_db()
@@ -59,13 +59,17 @@ df_all = pd.read_sql_query("SELECT * FROM items ORDER BY id DESC", conn)
 search = st.text_input("🔍 이름 또는 VIN 검색")
 df = df_all[df_all['item_name'].str.contains(search, na=False) | df_all['author'].str.contains(search, na=False)] if search else df_all
 
+# 통계 계산
+u_cnt = len(df[df['is_update'] == 'Y'])
+d_cnt = len(df[df['is_dtc'] == 'Y'])
+
 # 등록 현황 및 다운로드 버튼 영역
 t_col, b_col1, b_col2 = st.columns([4, 3, 3])
 with t_col:
-    st.markdown(f"##### 📋 {len(df)}건", unsafe_allow_html=True)
+    # 요청하신 업데이트, DTC 건수 표시 추가
+    st.markdown(f"##### 📋 {len(df)}건 <span style='color:blue; font-size:14px;'>| 업뎃:{u_cnt} | DTC:{d_cnt}</span>", unsafe_allow_html=True)
 
 with b_col1:
-    # VIN 현황 저장 (이전과 동일한 양식)
     df_ex = df.copy()
     df_ex['순번'] = range(1, len(df) + 1)
     df_ex = df_ex[['순번', 'timestamp', 'author', 'item_name', 'is_update', 'is_dtc']]
@@ -91,7 +95,7 @@ with b_col2:
 # 리스트 표시
 for row in df.itertuples():
     cols = st.columns([6, 2, 2])
-    cols[0].markdown(f"<small>{row.timestamp} | **{row.item_name}** | {row.author}</small>", unsafe_allow_html=True)
+    cols[0].markdown(f"<small>{row.timestamp} | **{row.item_name}** | {row.author}<br>UPDATE:{row.is_update} / DTC:{row.is_dtc}</small>", unsafe_allow_html=True)
     if cols[1].button("수정", key=f"e{row.id}"):
         st.session_state.update({"edit_id": row.id, "current_author": row.author, "next_vin": row.item_name, "next_upd": (row.is_update=='Y'), "next_dtc": (row.is_dtc=='Y')})
         st.rerun()
