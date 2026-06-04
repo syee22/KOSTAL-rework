@@ -55,15 +55,7 @@ def clear_data():
 st.set_page_config(page_title="KOSTAL Mobile", layout="centered")
 st.markdown("#### 📱 KOSTAL 리워크 현황")
 
-# 수정 모드용 상태 관리
 if "edit_id" not in st.session_state: st.session_state.edit_id = None
-
-def enter_edit_mode(row):
-    st.session_state.edit_id = row['id']
-    st.session_state.edit_author = row['author']
-    st.session_state.edit_item = row['item_name']
-    st.session_state.edit_upd = (row['is_update'] == 'Y')
-    st.session_state.edit_dtc = (row['is_dtc'] == 'Y')
 
 # 입력 폼
 with st.form("entry_form"):
@@ -84,7 +76,7 @@ with st.form("entry_form"):
 
 st.write("---")
 
-# 리스트 표시 영역
+# 검색 및 현황 리스트
 df = load_data()
 search = st.text_input("🔍 VIN 또는 이름 검색")
 if search:
@@ -93,7 +85,7 @@ if search:
 upd_count = len(df[df['is_update'] == 'Y'])
 dtc_count = len(df[df['is_dtc'] == 'Y'])
 
-# 타이틀 + 엑셀 저장 버튼 영역
+# 상단 타이틀 + 엑셀 버튼
 t_col, b_col = st.columns([6, 4])
 with t_col:
     st.markdown(f"##### 📋 리스트 <span style='color:red;'>({len(df)})</span> <span style='color:blue; font-size:12px;'>| 업뎃:{upd_count} | DTC:{dtc_count}</span>", unsafe_allow_html=True)
@@ -108,16 +100,20 @@ with b_col:
         towrite.seek(0)
         st.download_button("📥 엑셀 저장", towrite, "KOSTAL_list.xlsx", use_container_width=True)
 
+# 리스트 항목 표시 (강제 비율 적용)
 for _, row in df.iterrows():
+    # 여기서 비율을 5:2.5:2.5로 고정하여 한 줄 강제 정렬
     cols = st.columns([5, 2.5, 2.5])
+    
     with cols[0]:
-        st.write(f"**{row['item_name']}** / {row['author']}")
+        st.markdown(f"**{row['item_name']}**<br>{row['author']}", unsafe_allow_html=True)
     with cols[1]:
-        if st.button("수정", key=f"e{row['id']}"):
-            enter_edit_mode(row)
+        if st.button("수정", key=f"e{row['id']}", use_container_width=True):
+            st.session_state.update({"edit_id": row['id'], "edit_author": row['author'], "edit_item": row['item_name'], 
+                                     "edit_upd": (row['is_update'] == 'Y'), "edit_dtc": (row['is_dtc'] == 'Y')})
             st.rerun()
     with cols[2]:
-        if st.button("삭제", key=f"d{row['id']}"):
+        if st.button("삭제", key=f"d{row['id']}", use_container_width=True):
             delete_data(row['id'])
             st.rerun()
     st.write("---")
