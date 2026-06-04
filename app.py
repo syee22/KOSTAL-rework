@@ -56,7 +56,7 @@ def clear_data():
 
 # --- 3. UI 및 상태 관리 ---
 st.set_page_config(page_title="KOSTAL Mobile", layout="centered")
-st.markdown("#### 📱 KOSTAL 리워크 등록")
+st.markdown("#### 📱 KOSTAL 리워크 현황")
 
 if "edit_mode" not in st.session_state: st.session_state.edit_mode = False
 
@@ -83,18 +83,27 @@ else:
 
 st.write("---")
 
-# --- 4. 검색 및 리스트 표시 ---
+# --- 4. 검색 및 리스트 표시 (엑셀 버튼 상단 배치) ---
 df = load_data()
-
-# 요약 통계 계산
 upd_count = len(df[df['is_update'] == 'Y'])
 dtc_count = len(df[df['is_dtc'] == 'Y'])
 
-st.markdown(
-    f"##### 📋 마감 현황 <span style='color:red; font-size:16px; font-weight:bold;'>({len(df)})</span> "
-    f"<span style='color:blue; font-size:14px;'>| 업뎃: {upd_count} | DTC: {dtc_count}</span>", 
-    unsafe_allow_html=True
-)
+# 제목과 버튼을 한 라인에 배치
+t_col, b_col = st.columns([6, 4])
+with t_col:
+    st.markdown(
+        f"##### 📋 KOSTAL 리워크 현황 <span style='color:red; font-size:16px; font-weight:bold;'>({len(df)})</span> "
+        f"<span style='color:blue; font-size:12px;'>| 업뎃:{upd_count} | DTC:{dtc_count}</span>", 
+        unsafe_allow_html=True
+    )
+with b_col:
+    if not df.empty:
+        export_df = df[['id', 'timestamp', 'author', 'item_name', 'is_update', 'is_dtc']].copy()
+        export_df.columns = ['순번', '시간', '이름', 'VIN 넘버', '업데이트', 'DTC']
+        towrite = io.BytesIO()
+        export_df.to_excel(towrite, index=False, engine="openpyxl")
+        towrite.seek(0)
+        st.download_button("📥 엑셀 저장", towrite, "KOSTAL_list.xlsx", use_container_width=True)
 
 search = st.text_input("🔍 VIN 또는 이름 검색", placeholder="검색어를 입력하세요")
 if search:
@@ -119,24 +128,11 @@ for _, row in df.iterrows():
                 st.rerun()
     st.write("---")
 
-# --- 5. 하단 다운로드 및 리셋 ---
-st.markdown("##### 💾 백업 및 리셋")
-col_d1, col_d2 = st.columns(2)
-
-with col_d1:
-    if not df.empty:
-        export_df = df[['id', 'timestamp', 'author', 'item_name', 'is_update', 'is_dtc']].copy()
-        export_df.columns = ['순번', '시간', '이름', 'VIN 넘버', '업데이트', 'DTC']
-        
-        towrite = io.BytesIO()
-        export_df.to_excel(towrite, index=False, engine="openpyxl")
-        towrite.seek(0)
-        st.download_button("📈 일반 저장", towrite, "KOSTAL_list.xlsx", use_container_width=True)
-
-with col_d2:
-    if os.path.exists("KOSTAL_photo_registry.xlsx"):
-        with open("KOSTAL_photo_registry.xlsx", "rb") as f:
-            st.download_button("📸 사진 저장", f, "KOSTAL_photo_registry.xlsx", use_container_width=True)
+# --- 5. 하단 기타 기능 ---
+st.markdown("##### 💾 데이터 관리")
+if os.path.exists("KOSTAL_photo_registry.xlsx"):
+    with open("KOSTAL_photo_registry.xlsx", "rb") as f:
+        st.download_button("📸 사진 데이터 저장", f, "KOSTAL_photo_registry.xlsx", use_container_width=True)
 
 if st.button("🚨 전체 마감 리셋", use_container_width=True):
     clear_data()
