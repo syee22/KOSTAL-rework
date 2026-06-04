@@ -5,57 +5,52 @@ import pytz
 from datetime import datetime
 import db_manager
 
-# DB 연결
+# 1. 페이지 및 스타일 설정
+st.set_page_config(page_title="KOSTAL Mobile", layout="centered")
+st.markdown("""
+    <style>
+    /* 버튼을 텍스트 링크처럼 보이게 설정 */
+    div.stButton > button { 
+        padding: 0px 5px !important; 
+        font-size: 12px !important; 
+        height: 25px !important; 
+        border: none !important; 
+        background: none !important; 
+        color: blue !important; 
+    }
+    div.stButton > button:hover { text-decoration: underline; }
+    </style>
+""", unsafe_allow_html=True)
+
 conn = db_manager.init_db()
 
-# --- 함수 ---
+# 2. 함수
 def get_current_kst_time():
     return datetime.now(pytz.timezone('Asia/Seoul')).strftime('%m-%d %H:%M')
 
-# --- UI 설정 ---
-st.set_page_config(page_title="KOSTAL Mobile", layout="centered")
-st.markdown("#### 📱 KOSTAL 리워크 현황")
-
-# 1. 세션 상태 초기화
+# 3. 세션 상태 초기화
 if "edit_id" not in st.session_state: st.session_state.edit_id = None
 if "current_author" not in st.session_state: st.session_state.current_author = ""
 if "next_vin" not in st.session_state: st.session_state.next_vin = ""
 if "next_upd" not in st.session_state: st.session_state.next_upd = False
 if "next_dtc" not in st.session_state: st.session_state.next_dtc = False
 
-# 2. 수정/삭제 요청 처리
-params = st.query_params
-if "del" in params:
-    del_id = int(params["del"])
-    row = conn.execute("SELECT item_name FROM items WHERE id=?", (del_id,)).fetchone()
-    if row:
-        db_manager.delete_all_data_by_vin(conn, del_id, row[0])
-    st.query_params.clear()
-    st.rerun()
-
-if "edit" in params:
-    edit_id = int(params["edit"])
-    row = conn.execute("SELECT * FROM items WHERE id=?", (edit_id,)).fetchone()
-    if row:
-        st.session_state.update({"edit_id": row[0], "current_author": row[2], "next_vin": row[3], "next_upd": (row[4]=='Y'), "next_dtc": (row[5]=='Y')})
-    st.query_params.clear()
-    st.rerun()
-
-# 3. 입력 폼
+# 4. 입력 폼
+st.markdown("#### 📱 KOSTAL 리워크 현황")
 with st.form("entry_form", clear_on_submit=False):
     author = st.text_input("이름", value=st.session_state.current_author)
     item_name = st.text_input("VIN 6자리", value=st.session_state.next_vin, max_chars=6)
+    
     c1, c2 = st.columns(2)
     chk_u = c1.checkbox("업데이트", value=st.session_state.next_upd)
     chk_d = c2.checkbox("DTC", value=st.session_state.next_dtc)
+    
     photo_files = st.file_uploader("검사 사진 업로드 (최대 4개)", type=['jpg', 'jpeg', 'png'], accept_multiple_files=True)
     
     if st.form_submit_button("🚀 등록 / ✅ 수정 완료"):
         if item_name:
-            if photo_files:
-                db_manager.save_photos_to_db(conn, item_name, photo_files)
+            if photo_files: db_manager.save_photos_to_db(conn, item_name, photo_files)
             
-            # 수정 모드 vs 신규 등록 모드
             if st.session_state.edit_id:
                 conn.execute("UPDATE items SET author=?, item_name=?, is_update=?, is_dtc=? WHERE id=?", 
                              (author, item_name, 'Y' if chk_u else 'N', 'Y' if chk_d else 'N', st.session_state.edit_id))
@@ -69,7 +64,7 @@ with st.form("entry_form", clear_on_submit=False):
 
 st.write("---")
 
-# 4. 데이터 로드 및 리스트
+# 5. 데이터 리스트 및 통계
 df = pd.read_sql_query("SELECT * FROM items ORDER BY id DESC", conn)
 search = st.text_input("🔍 이름 또는 VIN 검색")
 if search: df = df[df['item_name'].str.contains(search, na=False) | df['author'].str.contains(search, na=False)]
@@ -100,13 +95,17 @@ with b_col2:
                     for idx, (img_data,) in enumerate(photos):
                         sheet.insert_image(chr(66+(idx*10))+'2', 'p.png', {'image_data': io.BytesIO(img_data), 'x_scale': 0.3, 'y_scale': 0.3})
         return towrite_p.getvalue()
-    st.download_button("📥 상세 사진 다운로드", data=create_photos_excel(), file_name="photos.xlsx", use_container_width=True)
+    
+    st.download_button("📥 상세 사진 다운로드", data=create_photos_excel(), file_name="photos.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True)
 
-# 리스트 표시
+# 6. 리스트 표시
 for row in df.itertuples():
-    st.markdown(
-        f"<small>{row.timestamp} | **{row.item_name}** | {row.author}<br>"
-        f"UPDATE:{row.is_update} / DTC:{row.is_dtc} "
-        f"&nbsp;&nbsp;<a href='/?edit={row.id}'>[수정]</a> <a href='/?del={row.id}'>[삭제]</a></small>", 
-        unsafe_allow_html=True
-    )
+    c_list = st.columns([6, 1, 1])
+    c_list[0].markdown(f"<small>{row.timestamp} | **{row.item_name}** | {row.author}<br>UPDATE:{row.is_update} / DTC:{row.is_dtc}</small>", unsafe_allow_html=True)
+    
+    if c_list[1].button("수정", key=f"e{row.id}"):
+        st.session_state.update({"edit_id": row.id, "current_author": row.author, "next_vin": row.item_name, "next_upd": (row.is_update=='Y'), "next_dtc": (row.is_dtc=='Y')})
+        st.rerun()
+    if c_list[2].button("삭제", key=f"d{row.id}"):
+        db_manager.delete_all_data_by_vin(conn, row.id, row.item_name)
+        st.rerun()
