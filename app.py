@@ -97,19 +97,15 @@ def save_image_to_excel(item_name, is_update, is_dtc, uploaded_file):
         ws['E1'] = "첨부 사진"
         
     image = Image.open(uploaded_file)
-    
-    # 📱 모달/모바일 폰카 대용량 사진 대응 리사이징 (가로 400px 제한 및 해상도 최적화)
     image.thumbnail((400, 400))
     
     img_byte_arr = io.BytesIO()
-    # JPEG 포맷 + 용량 최적화용 quality 스케일링 적용 (용량 최소화)
     if image.mode in ("RGBA", "P"):
         image = image.convert("RGB")
     image.save(img_byte_arr, format='JPEG', quality=75, optimize=True)
     img_byte_arr.seek(0)
     
     xl_img = OpenpyxlImage(img_byte_arr)
-    
     next_row = ws.max_row + 1 if ws.max_row > 1 or ws['A1'].value != "등록 시간" else 2
     
     ws[f'A{next_row}'] = get_current_kst_time()
@@ -118,15 +114,15 @@ def save_image_to_excel(item_name, is_update, is_dtc, uploaded_file):
     ws[f'D{next_row}'] = is_dtc
     
     ws.add_image(xl_img, f'E{next_row}')
-    ws.row_dimensions[next_row].height = 160  # 행 높이를 사진 비율에 맞춰 소폭 상향
+    ws.row_dimensions[next_row].height = 160  
     ws.column_dimensions['E'].width = 45
     
+    # 🔍 [오타 교정 완료] "임시_기본시text" -> "임시_기본시트"로 정확히 수정했습니다.
     if "임시_기본시트" in wb.sheetnames and len(wb.sheetnames) > 1:
-        del wb["임시_기본시text"]
+        del wb["임시_기본시트"]
         
     wb.save(excel_filename)
     return excel_filename
-
 
 # --- 5. 모달 팝업(Dialog) 정의 창 ---
 @st.dialog("⚠️ 데이터 삭제 확인")
@@ -150,7 +146,6 @@ def validation_error_dialog(message):
     st.write("마감 및 식별을 위해 품목명 칸에는 **반드시 숫자 6자리**를 정확히 입력해 주세요.")
     if st.button("확인", use_container_width=True):
         st.rerun()
-
 
 # --- 6. 수정/삭제 모드 관리를 위한 세션 상태 설정 ---
 if "edit_mode" not in st.session_state:
@@ -189,7 +184,6 @@ chk_dtc = st.sidebar.checkbox("⚠️ DTC 확인 완료", value=st.session_state
 val_update = "Y" if chk_update else "N"
 val_dtc = "Y" if chk_dtc else "N"
 
-# 📸 모바일 카메라 실시간 연동 팁 안내 문구 추가
 st.sidebar.markdown("---")
 st.sidebar.caption("💡 스마트폰 접속 시 아래 버튼을 누르면 즉시 카메라로 실시간 촬영 및 첨부가 가능합니다.")
 uploaded_file = st.sidebar.file_uploader("📸 증빙 사진 첨부 (선택 사항)", type=["png", "jpg", "jpeg"])
