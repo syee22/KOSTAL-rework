@@ -8,23 +8,27 @@ st.set_page_config(page_title="KOSTAL 통합 관리", layout="wide")
 conn = db_manager.init_db()
 
 # --- 1. 집계 현황 및 엑셀 다운로드 ---
-st.markdown("#### 📋 출고상태 및 우선순위별 현황")
+st.markdown("#### 📋 출고상태 및 우선순위별 현황 (3순위 이하 기타 분류)")
 df_master = db_manager.get_master_data()
 df_items = pd.read_sql_query("SELECT * FROM items", conn)
 
 if not df_master.empty:
     df_master['VIN'] = df_master['VIN'].astype(str).str.strip()
     
-    # 11개 헤더 중 '현재출고'와 '우선순위'를 이용해 그룹화
-    # 출고상태: '출고' 글자 제외하고 끝 2자리
+    # 출고그룹 및 우선순위그룹 분류
     df_master['출고그룹'] = df_master['현재출고'].astype(str).str.replace('출고', '').str[-2:]
-    df_master['우선순위그룹'] = df_master['우선순위'].astype(str)
+    
+    def categorize_priority(p):
+        p_str = str(p).replace('위', '').strip()
+        return f"{p_str}순위" if p_str in ['1', '2', '3'] else "기타"
+    
+    df_master['우선순위그룹'] = df_master['우선순위'].apply(categorize_priority)
 
     # 요약 표 생성
     summary = df_master.groupby(['출고그룹', '우선순위그룹']).size().unstack(fill_value=0)
     st.dataframe(summary, use_container_width=True)
 
-    # 엑셀 다운로드 (2개 시트)
+    # 엑셀 다운로드
     df_items['item_name'] = df_items['item_name'].astype(str).str.strip()
     merged = df_master.merge(df_items, left_on='VIN', right_on='item_name', how='left')
     
