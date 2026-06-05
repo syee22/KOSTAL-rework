@@ -1,6 +1,6 @@
 import streamlit as st
 import pandas as pd
-import pytz
+import io, pytz
 from datetime import datetime
 import db_manager
 
@@ -26,21 +26,42 @@ def confirm_update(new_author, item_name, new_chk3, new_chk4, new_final_new, new
                      (merged_author, m_upd, m_dtc, m_new, m_adj, m_remark, existing_id))
         conn.commit(); st.session_state.clear(); st.rerun()
 
-# --- 2. 집계 현황 ---
+# --- 2. 집계 현황 및 엑셀 출력 ---
 st.markdown("#### 📋 출고상태 및 우선순위별 완료 현황")
 df_master = db_manager.get_master_data()
 df_items = pd.read_sql_query("SELECT * FROM items", conn)
+
 if not df_master.empty:
     df_master['VIN'] = df_master['VIN'].astype(str).str.strip()
     df_master['출고그룹'] = df_master['현재출고'].astype(str).str.replace('출고', '').str[-2:]
     df_master['출고그룹'] = pd.Categorical(df_master['출고그룹'], categories=['아산', '울산', '화성'], ordered=True)
     df_master['우선순위그룹'] = pd.Categorical(df_master['우선순위'].apply(lambda p: f"{str(p).replace('위', '').strip()}순위" if str(p).replace('위', '').strip() in ['1', '2', '3'] else "기타"), 
                                         categories=['1순위', '2순위', '3순위', '기타'], ordered=True)
-    merged = df_master.merge(df_items[['item_name', 'is_new_zero', 'is_zero_adj']], left_on='VIN', right_on='item_name', how='left')
+    
+    merged = df_master.merge(df_items[['item_name', 'is_new_zero', 'is_zero_adj', 'author', 'timestamp', 'remark']], left_on='VIN', right_on='item_name', how='left')
     merged['교체완료건'] = merged['is_new_zero'].apply(lambda x: 1 if x == 'Y' else 0)
     merged['캘리완료건'] = merged['is_zero_adj'].apply(lambda x: 1 if x == 'Y' else 0)
+    
     summary = merged.groupby(['출고그룹', '우선순위그룹'], observed=False).agg({'VIN': 'count', '교체완료건': 'sum', '캘리완료건': 'sum'}).rename(columns={'VIN': '전체수량'})
     st.dataframe(summary.sort_index(level=['출고그룹', '우선순위그룹']).style.format("{:,}"), use_container_width=True, height=200)
+
+    # 엑셀 다운로드 (첫 행 고정 및 기능 복구)
+    towrite = io.BytesIO()
+    with pd.ExcelWriter(towrite, engine='xlsxwriter') as writer:
+        df_items.to_excel(writer, sheet_name='작업상세내역', index=False)
+        writer.sheets['작업상세내역'].freeze_panes(1, 0)
+        
+        report_df = merged.copy()
+        for col in ['is_new_zero', 'is_zero_adj']:
+            if col not in report_df.columns: report_df[col] = 'N'
+        report_df['Q_교체완료'] = report_df['is_new_zero'].fillna('N')
+        report_df['R_캘리브레이션'] = report_df['is_zero_adj'].fillna('N')
+        report_df['S_진행상태'] = report_df['is_zero_adj'].apply(lambda x: '완료' if x == 'Y' else '미완료')
+        report_df.to_excel(writer, sheet_name='전체현황', index=False)
+        ws = writer.sheets['전체현황']
+        ws.freeze_panes(1, 0)
+        ws.set_column('C:M', None, None, {'hidden': True})
+    st.download_button("📥 통합 리포트 다운로드", data=towrite.getvalue(), file_name="master_report.xlsx")
 
 # --- 3. 입력 폼 ---
 with st.form("entry_form", clear_on_submit=False):
@@ -53,15 +74,13 @@ with st.form("entry_form", clear_on_submit=False):
     chk2 = c2.checkbox("캘리브레이션", value=st.session_state.get("default_adj", False))
     chk3 = c3.checkbox("업데이트", value=st.session_state.get("default_upd", False))
     chk4 = c4.checkbox("DTC", value=st.session_state.get("default_dtc", False))
-    
     remark = st.text_area("비고", value=st.session_state.get("default_remark", ""))
     
-    submit = st.form_submit_button("🚀 등록/수정 저장")
-    if submit:
+    if st.form_submit_button("🚀 등록/수정 저장"):
         if not item_name or item_name.strip() == "":
             st.error("⚠️ VIN 6자리를 입력해주세요!")
             st.stop()
-            
+        
         edit_id = st.session_state.get("edit_id")
         final_new = 'Y' if (chk1 or chk2) else 'N'
         if edit_id:
@@ -80,7 +99,6 @@ with st.form("entry_form", clear_on_submit=False):
 st.subheader("🔍 작업 리스트 현황")
 search_query = st.text_input("VIN 검색", placeholder="VIN 번호로 검색하세요...")
 df_list = pd.read_sql_query("SELECT * FROM items ORDER BY id DESC", conn)
-
 if search_query:
     df_list = df_list[df_list['item_name'].str.contains(search_query, na=False)]
 
