@@ -34,8 +34,8 @@ df_items = pd.read_sql_query("SELECT * FROM items", conn)
 if not df_master.empty:
     df_master['VIN'] = df_master['VIN'].astype(str).str.strip()
     
-    # [수정] 6~7번째 글자 추출 (인덱스 5부터 7까지)
-    df_master['출고그룹'] = df_master['현재출고'].astype(str).str[5:7]
+    # [수정] '출고' 앞의 두 글자 추출 로직
+    df_master['출고그룹'] = df_master['현재출고'].astype(str).str.split('출고').str[0].str[-2:]
     df_master['출고그룹'] = pd.Categorical(df_master['출고그룹'], categories=['아산', '울산', '화성'], ordered=True)
     
     order = ['1순위', '2순위', '3순위', '기타']
@@ -53,7 +53,6 @@ if not df_master.empty:
     with pd.ExcelWriter(towrite, engine='xlsxwriter') as writer:
         df_items.to_excel(writer, sheet_name='작업상세내역', index=False)
         writer.sheets['작업상세내역'].freeze_panes(1, 0)
-        
         report_df = merged.copy()
         for col in ['is_new_zero', 'is_zero_adj']:
             if col not in report_df.columns: report_df[col] = 'N'
