@@ -1,6 +1,5 @@
 import sqlite3
 import pandas as pd
-import streamlit as st
 import os
 
 DB_NAME = "kostal_data.db"
@@ -27,14 +26,10 @@ def init_db():
 def get_master_data():
     if os.path.exists(MASTER_FILE):
         try:
-            # 헤더에 공백이 있을 경우를 대비해 strip() 적용
             df = pd.read_excel(MASTER_FILE)
-            df.columns = df.columns.str.strip()
+            # 모든 컬럼명을 문자열로 변환하고 공백 제거 (매칭 오류 방지)
+            df.columns = [str(c).strip() for c in df.columns]
             return df
-        except Exception as e:
+        except Exception:
             return pd.DataFrame()
     return pd.DataFrame()
-
-def delete_all_data_by_vin(conn, item_id, item_name):
-    conn.execute("DELETE FROM items WHERE id=?", (item_id,))
-    conn.commit()
