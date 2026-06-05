@@ -4,7 +4,7 @@ import streamlit as st
 import os
 
 DB_NAME = "kostal_data.db"
-MASTER_FILE = "master_vin_list.xlsx" # 파일명 수정 완료
+MASTER_FILE = "master_vin_list.xlsx"
 
 def init_db():
     conn = sqlite3.connect(DB_NAME, check_same_thread=False)
@@ -26,9 +26,14 @@ def init_db():
 
 def get_master_data():
     if os.path.exists(MASTER_FILE):
-        return pd.read_excel(MASTER_FILE)
-    else:
-        return pd.DataFrame(columns=['VIN', '현재출고', '우선순위'])
+        try:
+            # 헤더에 공백이 있을 경우를 대비해 strip() 적용
+            df = pd.read_excel(MASTER_FILE)
+            df.columns = df.columns.str.strip()
+            return df
+        except Exception as e:
+            return pd.DataFrame()
+    return pd.DataFrame()
 
 def delete_all_data_by_vin(conn, item_id, item_name):
     conn.execute("DELETE FROM items WHERE id=?", (item_id,))
