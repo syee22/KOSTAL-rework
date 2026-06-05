@@ -7,20 +7,28 @@ import db_manager
 st.set_page_config(page_title="KOSTAL 통합 관리", layout="centered")
 conn = db_manager.init_db()
 
-# --- 1. 현황 집계 및 다운로드 ---
-st.markdown("#### 📋 우선순위별/출고별 작업 완료 현황")
+# --- 1. 현황 집계 및 2개 시트 다운로드 ---
+st.markdown("#### 📋 우선순위별 / 출고별 작업 완료 현황")
 df_master = db_manager.get_master_data()
 df_items = pd.read_sql_query("SELECT * FROM items", conn)
 
 if not df_master.empty:
     vin_key = 'VIN'
     
+    # 데이터 전처리
     df_master[vin_key] = df_master[vin_key].astype(str).str.strip()
-    # '현재출고'에서 "출고" 앞 2글자만 추출
+    
+    # 출고상태: "출고" 앞 2글자 추출
     if '현재출고' in df_master.columns:
         df_master['출고상태'] = df_master['현재출고'].astype(str).str.replace('출고', '').str[-2:]
     else:
         df_master['출고상태'] = '기타'
+        
+    # 우선순위그룹: 3위까지만 표시, 그 외는 '기타'
+    if '우선순위' in df_master.columns:
+        df_master['우선순위그룹'] = df_master['우선순위'].apply(lambda x: str(x) if str(x).isdigit() and int(x) <= 3 else '기타')
+    else:
+        df_master['우선순위그룹'] = '기타'
 
     if not df_items.empty:
         df_items['item_name'] = df_items['item_name'].astype(str).str.strip()
@@ -30,11 +38,11 @@ if not df_master.empty:
         merged = df_master.copy()
         merged['상태'] = '미완료'
 
-    # '우선순위'와 '출고상태' 기준으로 집계
-    if '우선순위' in merged.columns and not df_items.empty:
-        summary = merged.groupby(['우선순위', '출고상태', '상태']).size().unstack(fill_value=0)
-        st.dataframe(summary, use_container_width=True)
+    # 요약 집계
+    summary = merged.groupby(['우선순위그룹', '출고상태', '상태']).size().unstack(fill_value=0)
+    st.dataframe(summary, use_container_width=True)
     
+    # 2개 시트 엑셀 생성
     towrite = io.BytesIO()
     with pd.ExcelWriter(towrite, engine='xlsxwriter') as writer:
         if not df_items.empty:
@@ -104,4 +112,4 @@ for row in df.itertuples():
         <b>{row.item_name}</b> | {row.author} | {row.timestamp}<br>
         <small style="color: #555;">{' | '.join(tags)}</small><br>{row.remark}<br>
         <div style="text-align: right;"><a href="/?edit={row.id}">수정</a> | <a href="/?del={row.id}" style="color:red;">삭제</a></div>
-    </div>""", unsafe_allow_html=True)
+    </div>""", unsafe_html=True)
