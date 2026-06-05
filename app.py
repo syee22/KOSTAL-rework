@@ -28,11 +28,13 @@ st.markdown("#### 📱 KOSTAL 리워크 현황")
 with st.form("entry_form", clear_on_submit=False):
     author = st.text_input("이름", value=st.session_state.get("current_author", ""))
     item_name = st.text_input("VIN 6자리", value=st.session_state.get("next_vin", ""), max_chars=6)
+    
     c1, c2, c3, c4 = st.columns(4)
     chk_new = c1.checkbox("신규영점", value=st.session_state.get("next_new", False))
     chk_adj = c2.checkbox("영점조절", value=st.session_state.get("next_adj", False))
     chk_u = c3.checkbox("업데이트", value=st.session_state.get("next_upd", False))
     chk_d = c4.checkbox("DTC", value=st.session_state.get("next_dtc", False))
+    
     remark = st.text_area("비고 (최대 2줄)", value=st.session_state.get("next_remark", ""), height=70)
     photo_files = st.file_uploader("검사 사진 업로드", type=['jpg', 'jpeg', 'png'], accept_multiple_files=True)
     
@@ -61,32 +63,31 @@ if search: df = df[df['item_name'].str.contains(search, na=False) | df['author']
 if not df.empty:
     st.info(f"📊 총 {len(df)}건 | 신규:{len(df[df['is_new_zero']=='Y'])} | 조절:{len(df[df['is_zero_adj']=='Y'])} | 업뎃:{len(df[df['is_update']=='Y'])} | DTC:{len(df[df['is_dtc']=='Y'])}")
 
-# 📥 다운로드 버튼 (엑셀 기능 복구)
+# 📥 다운로드 버튼 (안전한 get_photos 함수 적용)
 col1, col2 = st.columns(2)
 with col1:
     towrite = io.BytesIO()
     df.to_excel(towrite, index=False)
     st.download_button("📥 현황 저장", data=towrite.getvalue() if not df.empty else b'', file_name="list.xlsx", use_container_width=True)
+
 with col2:
-    # app.py 의 get_photos 함수 부분을 이것으로 교체하세요
-def get_photos():
-    towrite_p = io.BytesIO()
-    try:
-        # 데이터가 비어있으면 빈 바이트 반환
-        if df.empty: return b''
-        
-        with pd.ExcelWriter(towrite_p, engine='xlsxwriter') as writer:
-            for vin in df['item_name'].unique():
-                photos = db_manager.get_photos_by_vin(conn, vin)
-                if photos:
-                    s = writer.book.add_worksheet(name=str(vin))
-                    for i, (img,) in enumerate(photos):
-                        s.insert_image(chr(66+(i*10))+'2', 'p.png', {'image_data': io.BytesIO(img), 'x_scale': 0.3, 'y_scale': 0.3})
-        return towrite_p.getvalue()
-    except Exception as e:
-        st.warning("사진 데이터를 불러오는 중 오류가 발생했습니다.")
-        return b''
-    st.download_button("📥 사진 저장", data=get_photos() if not df.empty else b'', file_name="photos.xlsx", use_container_width=True)
+    def get_photos():
+        towrite_p = io.BytesIO()
+        try:
+            if df.empty: return b''
+            with pd.ExcelWriter(towrite_p, engine='xlsxwriter') as writer:
+                for vin in df['item_name'].unique():
+                    photos = db_manager.get_photos_by_vin(conn, vin)
+                    if photos:
+                        s = writer.book.add_worksheet(name=str(vin))
+                        for i, (img,) in enumerate(photos):
+                            s.insert_image(chr(66+(i*10))+'2', 'p.png', {'image_data': io.BytesIO(img), 'x_scale': 0.3, 'y_scale': 0.3})
+            return towrite_p.getvalue()
+        except Exception as e:
+            st.warning("사진 데이터를 불러오는 중 오류가 발생했습니다.")
+            return b''
+
+    st.download_button("📥 사진 저장", data=get_photos(), file_name="photos.xlsx", use_container_width=True)
 
 # 리스트 표시
 for row in df.itertuples():
