@@ -7,16 +7,15 @@ import db_manager
 st.set_page_config(page_title="KOSTAL 통합 관리", layout="centered")
 conn = db_manager.init_db()
 
-# --- 1. Git 마스터 기반 우선순위별 현황 집계 ---
+# --- 1. 현황 집계 및 2개 시트 다운로드 ---
 st.markdown("#### 📋 우선순위별 작업 완료 현황")
 df_master = db_manager.get_master_data()
-df_items = pd.read_sql_query("SELECT item_name, author FROM items", conn)
+df_items = pd.read_sql_query("SELECT * FROM items", conn)
 
 if not df_master.empty and not df_items.empty:
     vin_col = df_master.columns[0]
     prio_col = df_master.columns[1] if len(df_master.columns) > 1 else df_master.columns[0]
     
-    # 데이터 타입 통일 및 공백 제거 (미완료 문제 해결 핵심)
     df_master[vin_col] = df_master[vin_col].astype(str).str.strip()
     df_items['item_name'] = df_items['item_name'].astype(str).str.strip()
     
@@ -26,9 +25,14 @@ if not df_master.empty and not df_items.empty:
     summary = merged.groupby([prio_col, '상태']).size().unstack(fill_value=0)
     st.dataframe(summary, use_container_width=True)
     
+    # 2개 시트 엑셀 생성
     towrite = io.BytesIO()
-    merged.to_excel(towrite, index=False)
-    st.download_button("📥 전체 현황 다운로드", data=towrite.getvalue(), file_name="master_report.xlsx", use_container_width=True)
+    with pd.ExcelWriter(towrite, engine='xlsxwriter') as writer:
+        df_log = df_items[['timestamp', 'item_name', 'author', 'is_update', 'is_dtc', 'is_new_zero', 'is_zero_adj', 'remark']]
+        df_log.to_excel(writer, sheet_name='작업상세내역', index=False)
+        merged.to_excel(writer, sheet_name='전체현황', index=False)
+    
+    st.download_button("📥 전체 리포트 다운로드 (2개 시트)", data=towrite.getvalue(), file_name="master_report.xlsx", use_container_width=True)
 
 # --- 2. 파라미터 로직 ---
 params = st.query_params
@@ -55,7 +59,7 @@ with st.form("entry_form", clear_on_submit=False):
     chk_new = c1.checkbox("교체완료", key="chk_new", value=st.session_state.get("next_new", False))
     chk_adj = c2.checkbox("캘리브레이션", key="chk_adj", value=st.session_state.get("next_adj", False))
     chk_u = c3.checkbox("업데이트", value=st.session_state.get("next_upd", False))
-    chk_d = c3.checkbox("DTC", value=st.session_state.get("next_dtc", False))
+    chk_d = c4.checkbox("DTC", value=st.session_state.get("next_dtc", False))
     
     remark = st.text_area("비고", value=st.session_state.get("next_remark", ""), height=70)
     photo_files = st.file_uploader("사진 업로드", type=['jpg', 'jpeg', 'png'], accept_multiple_files=True)
