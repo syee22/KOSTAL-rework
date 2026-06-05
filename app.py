@@ -7,7 +7,7 @@ import db_manager
 st.set_page_config(page_title="KOSTAL 통합 관리", layout="wide")
 conn = db_manager.init_db()
 
-# --- 1. 중복 데이터 종합 다이얼로그 (이전과 동일) ---
+# --- 1. 중복 데이터 종합 다이얼로그 ---
 @st.dialog("중복 데이터 종합!")
 def confirm_update(new_author, item_name, new_chk3, new_chk4, new_final_new, new_chk2, new_remark, existing_id):
     row = conn.execute("SELECT author, is_update, is_dtc, is_new_zero, is_zero_adj, remark FROM items WHERE id=?", (existing_id,)).fetchone()
@@ -26,9 +26,8 @@ def confirm_update(new_author, item_name, new_chk3, new_chk4, new_final_new, new
                      (merged_author, m_upd, m_dtc, m_new, m_adj, m_remark, existing_id))
         conn.commit(); st.session_state.clear(); st.rerun()
 
-# --- 2. 집계 현황 및 엑셀 출력 (이전과 동일) ---
+# --- 2. 집계 현황 및 엑셀 출력 ---
 st.markdown("#### 📋 출고상태 및 우선순위별 완료 현황")
-# ... (집계 로직 및 엑셀 다운로드 동일)
 df_master = db_manager.get_master_data()
 df_items = pd.read_sql_query("SELECT * FROM items", conn)
 if not df_master.empty:
@@ -53,10 +52,19 @@ with st.form("entry_form", clear_on_submit=False):
     chk1, chk2, chk3, chk4 = c1.checkbox("교체완료", value=st.session_state.get("default_new", False)), \
                              c2.checkbox("캘리브레이션", value=st.session_state.get("default_adj", False)), \
                              c3.checkbox("업데이트", value=st.session_state.get("default_upd", False)), \
-                             c4.checkbox("DTC", value=st.session_state.get("default_dtc", False))
+                             c4.checkbox("DTC", value=st.checkbox("DTC", value=st.session_state.get("default_dtc", False))) # 오타수정
+    
+    # 체크박스 값 보정
+    chk4 = c4.checkbox("DTC", value=st.session_state.get("default_dtc", False))
+    
     remark = st.text_area("비고", value=st.session_state.get("default_remark", ""))
     
     if st.form_submit_button("🚀 등록/수정 저장"):
+        # 빈 값 체크
+        if not item_name or item_name.strip() == "":
+            st.error("⚠️ VIN 6자리를 입력해주세요!")
+            st.stop()
+            
         edit_id = st.session_state.get("edit_id")
         final_new = 'Y' if (chk1 or chk2) else 'N'
         if edit_id:
@@ -80,7 +88,6 @@ if search_query:
     df_list = df_list[df_list['item_name'].str.contains(search_query, na=False)]
 
 for _, row in df_list.iterrows():
-    # 상태 태그 생성
     tags = []
     if row['is_new_zero'] == 'Y': tags.append("✅교체")
     if row['is_zero_adj'] == 'Y': tags.append("⚙️캘리")
