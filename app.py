@@ -15,35 +15,43 @@ df_items = pd.read_sql_query("SELECT * FROM items", conn)
 if not df_master.empty:
     df_master['VIN'] = df_master['VIN'].astype(str).str.strip()
     
-    # 출고그룹 및 우선순위그룹 분류
+    # 1. 출고 및 우선순위 그룹화
     df_master['출고그룹'] = df_master['현재출고'].astype(str).str.replace('출고', '').str[-2:]
     def categorize_priority(p):
         p_str = str(p).replace('위', '').strip()
         return f"{p_str}순위" if p_str in ['1', '2', '3'] else "기타"
     df_master['우선순위그룹'] = df_master['우선순위'].apply(categorize_priority)
 
-    # 완료 기준: 캘리브레이션(is_zero_adj)이 'Y'이면 완료
+    # 2. 매칭 및 진행상태 정의
     if not df_items.empty:
         df_items['item_name'] = df_items['item_name'].astype(str).str.strip()
         df_items['진행상태'] = df_items['is_zero_adj'].apply(lambda x: '완료' if x == 'Y' else '미완료')
-        merged = df_master.merge(df_items[['item_name', '진행상태']], left_on='VIN', right_on='item_name', how='left')
-        merged['진행상태'] = merged['진행상태'].fillna('미완료')
+        merged = df_master.merge(df_items[['item_name', '진행상태', 'is_new_zero', 'is_zero_adj', 'author', 'timestamp', 'remark']], 
+                                 left_on='VIN', right_on='item_name', how='left')
     else:
         merged = df_master.copy()
         merged['진행상태'] = '미완료'
 
-    # 요약 표 생성
+    # 요약 표 출력
     summary = merged.groupby(['출고그룹', '우선순위그룹', '진행상태']).size().unstack(fill_value=0)
     st.dataframe(summary, use_container_width=True)
 
-    # 엑셀 다운로드
+    # 3. 엑셀 생성 (Q:교체완료, R:캘리브레이션, S:진행상태)
     towrite = io.BytesIO()
     with pd.ExcelWriter(towrite, engine='xlsxwriter') as writer:
         df_items.to_excel(writer, sheet_name='작업상세내역', index=False)
-        merged.to_excel(writer, sheet_name='전체현황', index=False)
+        
+        # 전체현황 시트 준비
+        report_df = merged.copy()
+        report_df['Q_교체완료'] = report_df['is_new_zero'].fillna('N')
+        report_df['R_캘리브레이션'] = report_df['is_zero_adj'].fillna('N')
+        report_df['S_진행상태'] = report_df['진행상태'].fillna('미완료')
+        
+        report_df.to_excel(writer, sheet_name='전체현황', index=False)
         ws = writer.sheets['전체현황']
         ws.set_column('C:M', None, None, {'hidden': True})
         ws.freeze_panes(1, 0)
+        
     st.download_button("📥 통합 리포트 다운로드 (2개 시트)", data=towrite.getvalue(), file_name="master_report.xlsx")
 
 # --- 2. 입력 폼 ---
@@ -56,7 +64,6 @@ with st.form("entry"):
     remark = st.text_area("비고")
     if st.form_submit_button("🚀 등록"):
         now = datetime.now(pytz.timezone('Asia/Seoul')).strftime('%m-%d %H:%M')
-        # 캘리브레이션 체크 시 자동으로 교체완료도 포함되도록 로직 반영
         final_new = 'Y' if (chk1 or chk2) else 'N'
         conn.execute("INSERT INTO items (timestamp, author, item_name, is_update, is_dtc, is_new_zero, is_zero_adj, remark) VALUES (?,?,?,?,?,?,?,?)",
                      (now, author, item_name, 'Y' if chk3 else 'N', 'Y' if chk4 else 'N', final_new, 'Y' if chk2 else 'N', remark))
