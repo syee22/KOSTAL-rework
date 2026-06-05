@@ -14,8 +14,6 @@ df_items = pd.read_sql_query("SELECT * FROM items", conn)
 
 if not df_master.empty:
     vin_key = 'VIN'
-    
-    # 데이터 전처리
     df_master[vin_key] = df_master[vin_key].astype(str).str.strip()
     
     # 출고상태: "출고" 앞 2글자 추출
@@ -101,15 +99,20 @@ with st.form("entry_form", clear_on_submit=False):
             st.session_state.update({"edit_id": None, "current_author": "", "next_vin": "", "next_upd": False, "next_dtc": False, "next_new": False, "next_adj": False, "next_remark": ""})
             st.rerun()
 
-# --- 4. 리스트 출력 ---
+# --- 4. 리스트 출력 (안전성 강화) ---
 df = pd.read_sql_query("SELECT * FROM items ORDER BY id DESC", conn)
 search = st.text_input("🔍 이름 또는 VIN 검색")
-if search: df = df[df['item_name'].str.contains(search, na=False) | df['author'].str.contains(search, na=False)]
+if search: 
+    df = df[df['item_name'].astype(str).str.contains(search, na=False) | df['author'].astype(str).str.contains(search, na=False)]
 
 for row in df.itertuples():
+    name = str(row.item_name or "")
+    author = str(row.author or "")
+    time = str(row.timestamp or "")
+    remark = str(row.remark or "")
     tags = [t for t, cond in [("교체완료", row.is_new_zero=='Y'), ("캘리브레이션", row.is_zero_adj=='Y'), ("업뎃", row.is_update=='Y'), ("DTC", row.is_dtc=='Y')] if cond]
     st.markdown(f"""<div style="padding: 10px; border-bottom: 1px solid #eee;">
-        <b>{row.item_name}</b> | {row.author} | {row.timestamp}<br>
-        <small style="color: #555;">{' | '.join(tags)}</small><br>{row.remark}<br>
+        <b>{name}</b> | {author} | {time}<br>
+        <small style="color: #555;">{' | '.join(tags)}</small><br>{remark}<br>
         <div style="text-align: right;"><a href="/?edit={row.id}">수정</a> | <a href="/?del={row.id}" style="color:red;">삭제</a></div>
     </div>""", unsafe_html=True)
