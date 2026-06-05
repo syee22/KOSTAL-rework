@@ -7,7 +7,7 @@ import db_manager
 st.set_page_config(page_title="KOSTAL 통합 관리", layout="centered")
 conn = db_manager.init_db()
 
-# --- 1. 현황 집계 및 2개 시트 다운로드 ---
+# --- 1. Git 마스터 기반 현황 집계 및 2개 시트 엑셀 다운로드 ---
 st.markdown("#### 📋 우선순위별 작업 완료 현황")
 df_master = db_manager.get_master_data()
 df_items = pd.read_sql_query("SELECT * FROM items", conn)
@@ -16,30 +16,33 @@ if not df_master.empty and not df_items.empty:
     vin_col = df_master.columns[0]
     prio_col = df_master.columns[1] if len(df_master.columns) > 1 else df_master.columns[0]
     
+    # VIN 데이터 정제
     df_master[vin_col] = df_master[vin_col].astype(str).str.strip()
     df_items['item_name'] = df_items['item_name'].astype(str).str.strip()
     
-    # 작업 상세 정보가 전체현황에도 포함되도록 병합
+    # 마스터와 작업 이력 병합
     merged = df_master.merge(df_items, left_on=vin_col, right_on='item_name', how='left')
     merged['상태'] = merged['author'].apply(lambda x: '완료' if pd.notnull(x) else '미완료')
     
-    # 화면 표시용 요약
+    # 화면 요약 표
     summary = merged.groupby([prio_col, '상태']).size().unstack(fill_value=0)
     st.dataframe(summary, use_container_width=True)
     
-    # 2개 시트 엑셀 생성
+    # 2개 시트 엑셀 다운로드 로직
     towrite = io.BytesIO()
     with pd.ExcelWriter(towrite, engine='xlsxwriter') as writer:
-        # 시트 1: 작업 상세 내역 (DB 원본 데이터)
+        # 시트 1: 상세 작업 로그
         df_log = df_items[['timestamp', 'item_name', 'author', 'is_update', 'is_dtc', 'is_new_zero', 'is_zero_adj', 'remark']]
         df_log.to_excel(writer, sheet_name='작업상세내역', index=False)
         
-        # 시트 2: 전체현황 (마스터 + 작업 정보 결합)
-        merged.to_excel(writer, sheet_name='전체현황', index=False)
+        # 시트 2: 마스터 대조 결과 (작업 정보 포함)
+        cols_to_keep = [vin_col, prio_col, '상태', 'timestamp', 'author', 'is_update', 'is_dtc', 'is_new_zero', 'is_zero_adj', 'remark']
+        merged_clean = merged[cols_to_keep]
+        merged_clean.to_excel(writer, sheet_name='전체현황', index=False)
     
     st.download_button("📥 전체 리포트 다운로드 (2개 시트)", data=towrite.getvalue(), file_name="master_report.xlsx", use_container_width=True)
 
-# --- 2. 파라미터 로직 ---
+# --- 2. 파라미터 로직 (삭제/수정) ---
 params = st.query_params
 if "del" in params:
     del_id = int(params["del"])
@@ -54,7 +57,7 @@ if "edit" in params:
         st.session_state.update({"edit_id": row[0], "current_author": row[2], "next_vin": row[3], "next_upd": (row[4]=='Y'), "next_dtc": (row[5]=='Y'), "next_new": (row[6]=='Y'), "next_adj": (row[7]=='Y'), "next_remark": row[8]})
     st.query_params.clear(); st.rerun()
 
-# --- 3. 입력 폼 ---
+# --- 3. 입력 폼 (캘리브레이션 시 교체완료 자동 선택) ---
 st.markdown("#### 📱 KOSTAL 리워크 현황")
 with st.form("entry_form", clear_on_submit=False):
     author = st.text_input("이름", value=st.session_state.get("current_author", ""))
@@ -72,7 +75,9 @@ with st.form("entry_form", clear_on_submit=False):
     if st.form_submit_button("🚀 등록 / ✅ 수정 완료"):
         if not item_name: st.error("VIN 번호를 입력하세요.")
         else:
+            # 캘리브레이션 체크 시 교체완료 자동 선택 로직
             final_new = True if st.session_state.chk_adj else st.session_state.chk_new
+            
             kst = pytz.timezone('Asia/Seoul')
             now = datetime.now(kst).strftime('%m-%d %H:%M')
             vals = (now, author, item_name, 'Y' if chk_u else 'N', 'Y' if chk_d else 'N', 'Y' if final_new else 'N', 'Y' if st.session_state.chk_adj else 'N', remark)
