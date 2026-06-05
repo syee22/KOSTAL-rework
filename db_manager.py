@@ -1,10 +1,11 @@
 import sqlite3
 
-# db_manager.py 수정 코드
 def init_db():
-    conn = sqlite3.connect('kostal_data.db', check_same_thread=False)
+    # 1. 파일명을 바꾸어 기존의 꼬인 DB와 완전히 분리합니다.
+    db_path = 'kostal_final.db'
+    conn = sqlite3.connect(db_path, check_same_thread=False)
     
-    # 테이블이 없으면 확실히 생성
+    # 2. 테이블 생성 (IF NOT EXISTS를 사용하여 안전하게)
     conn.execute('''
         CREATE TABLE IF NOT EXISTS items (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -16,7 +17,6 @@ def init_db():
         )
     ''')
     
-    # photos 테이블이 없으면 확실히 생성
     conn.execute('''
         CREATE TABLE IF NOT EXISTS photos (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -34,12 +34,13 @@ def save_photos_to_db(conn, item_name, photo_files):
     conn.commit()
 
 def get_photos_by_vin(conn, item_name):
-    # 해당 VIN의 사진만 조회
-    return conn.execute("SELECT image FROM photos WHERE item_name = ?", (item_name,)).fetchall()
+    try:
+        return conn.execute("SELECT image FROM photos WHERE item_name = ?", (item_name,)).fetchall()
+    except sqlite3.OperationalError:
+        # 테이블이 존재하지 않는 경우 빈 리스트 반환
+        return []
 
 def delete_all_data_by_vin(conn, id, item_name):
-    # 아이템 삭제
     conn.execute("DELETE FROM items WHERE id = ?", (id,))
-    # 해당 VIN의 모든 사진 삭제
     conn.execute("DELETE FROM photos WHERE item_name = ?", (item_name,))
     conn.commit()
