@@ -27,7 +27,6 @@ if "edit" in params:
 # 3. 입력 폼
 st.markdown("#### 📱 KOSTAL 리워크 현황")
 
-# 수정 모드 표시 및 취소 버튼
 if st.session_state.get("edit_id"):
     st.warning(f"현재 ID {st.session_state['edit_id']} 수정 중")
     if st.button("수정 취소"):
@@ -46,23 +45,18 @@ with st.form("entry_form", clear_on_submit=False):
         if not item_name:
             st.error("VIN 번호를 입력하세요.")
         else:
-            # KST 시간 생성
             kst = pytz.timezone('Asia/Seoul')
             now_kst = datetime.now(kst).strftime('%m-%d %H:%M')
-            
             edit_id = st.session_state.get("edit_id")
             if not edit_id:
-                # 신규 등록 시 중복 체크
                 existing = conn.execute("SELECT id FROM items WHERE item_name = ?", (item_name,)).fetchone()
-                if existing:
-                    st.error("이미 등록된 VIN입니다.")
+                if existing: st.error("이미 등록된 VIN입니다.")
                 else:
                     if photo_files: db_manager.save_photos_to_db(conn, item_name, photo_files)
                     conn.execute("INSERT INTO items (timestamp, author, item_name, is_update, is_dtc) VALUES (?, ?, ?, ?, ?)", 
                                  (now_kst, author, item_name, 'Y' if chk_u else 'N', 'Y' if chk_d else 'N'))
                     conn.commit()
             else:
-                # 수정 로직
                 if photo_files: db_manager.save_photos_to_db(conn, item_name, photo_files)
                 conn.execute("UPDATE items SET author=?, item_name=?, is_update=?, is_dtc=? WHERE id=?", 
                              (author, item_name, 'Y' if chk_u else 'N', 'Y' if chk_d else 'N', edit_id))
@@ -79,13 +73,13 @@ if search: df = df[df['item_name'].str.contains(search, na=False) | df['author']
 u_cnt, d_cnt = len(df[df['is_update'] == 'Y']), len(df[df['is_dtc'] == 'Y'])
 st.markdown(f"<small>📋 <b>{len(df)}건</b> | 업뎃: {u_cnt} | DTC: {d_cnt}</small>", unsafe_allow_html=True)
 
-# 다운로드 버튼 영역
+# 다운로드 버튼 영역 (수정 반영)
 col_d1, col_d2 = st.columns(2)
 with col_d1:
     df_ex = df[['timestamp', 'author', 'item_name', 'is_update', 'is_dtc']]
     towrite = io.BytesIO()
     df_ex.to_excel(towrite, index=False)
-    st.download_button("📥 현황 저장", data=towrite.getvalue() if not df.empty else None, 
+    st.download_button("📥 현황 저장", data=towrite.getvalue() if not df.empty else b'', 
                        file_name="list.xlsx", use_container_width=True, disabled=df.empty)
 with col_d2:
     def get_photos():
@@ -99,7 +93,7 @@ with col_d2:
                         s.insert_image(chr(66+(i*10))+'2', 'p.png', {'image_data': io.BytesIO(img), 'x_scale': 0.3, 'y_scale': 0.3})
         return towrite_p.getvalue()
     
-    st.download_button("📥 사진 저장", data=get_photos() if not df.empty else None, 
+    st.download_button("📥 사진 저장", data=get_photos() if not df.empty else b'', 
                        file_name="photos.xlsx", use_container_width=True, disabled=df.empty)
 
 # 5. 리스트 표시
