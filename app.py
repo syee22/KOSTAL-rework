@@ -7,25 +7,23 @@ import db_manager
 st.set_page_config(page_title="KOSTAL 통합 관리", layout="centered")
 conn = db_manager.init_db()
 
-# --- 1. 통합 대조 섹션 ---
-st.markdown("#### 🔍 리워크 통합 대조 현황")
-with st.expander("📂 타업체 완료 리스트 업로드"):
-    if uploaded_ext := st.file_uploader("타업체 작업 엑셀 (VIN, 업체명)", type=['xlsx']):
-        db_manager.update_external_work(conn, pd.read_excel(uploaded_ext))
-        st.success("타업체 데이터 반영 완료!")
+# --- 1. Git 마스터 기반 실적 대조 (추가된 기능) ---
+st.markdown("#### 📋 고객사 리스트 기반 실적 대조")
+df_master = db_manager.get_master_data()
+df_items = pd.read_sql_query("SELECT item_name, author, timestamp FROM items", conn)
 
-df_m = db_manager.get_master_data()
-if not df_m.empty:
-    df_i = pd.read_sql_query("SELECT item_name, author FROM items", conn)
-    df_e = pd.read_sql_query("SELECT * FROM external_work", conn)
+if not df_master.empty:
+    master_vin_col = df_master.columns[0]
+    merged = df_master.merge(df_items, left_on=master_vin_col, right_on='item_name', how='left')
+    merged['진행상태'] = merged['author'].apply(lambda x: '작업완료' if pd.notnull(x) else '미작업')
     
-    merged = df_m.merge(df_i, left_on='VIN', right_on='item_name', how='left')
-    merged = merged.merge(df_e, on='VIN', how='left')
-    merged['우리작업'] = merged['author'].apply(lambda x: '완료' if pd.notnull(x) else '미완료')
-    merged['타업체작업'] = merged['company'].apply(lambda x: '완료' if pd.notnull(x) else '미완료')
-    st.dataframe(merged[['VIN', '우리작업', '타업체작업']], use_container_width=True)
+    st.dataframe(merged[[master_vin_col, '진행상태', 'author', 'timestamp']], use_container_width=True)
+    
+    towrite = io.BytesIO()
+    merged.to_excel(towrite, index=False)
+    st.download_button("📥 전체 현황 엑셀 다운로드", data=towrite.getvalue(), file_name="master_report.xlsx", use_container_width=True)
 
-# --- 2. 파라미터 로직 (삭제 및 수정) ---
+# --- 2. 파라미터 로직 (기존 기능) ---
 params = st.query_params
 if "del" in params:
     del_id = int(params["del"])
@@ -40,16 +38,19 @@ if "edit" in params:
         st.session_state.update({"edit_id": row[0], "current_author": row[2], "next_vin": row[3], "next_upd": (row[4]=='Y'), "next_dtc": (row[5]=='Y'), "next_new": (row[6]=='Y'), "next_adj": (row[7]=='Y'), "next_remark": row[8]})
     st.query_params.clear(); st.rerun()
 
-# --- 3. 입력 폼 ---
+# --- 3. 입력 폼 (기존 기능) ---
+st.markdown("#### 📱 KOSTAL 리워크 현황")
 with st.form("entry_form", clear_on_submit=False):
     author = st.text_input("이름", value=st.session_state.get("current_author", ""))
     item_name = st.text_input("VIN 6자리", value=st.session_state.get("next_vin", ""), max_chars=6)
+    
     c1, c2, c3, c4 = st.columns(4)
     chk_new = c1.checkbox("신규영점", value=st.session_state.get("next_new", False))
     chk_adj = c2.checkbox("영점조절", value=st.session_state.get("next_adj", False))
     chk_u = c3.checkbox("업데이트", value=st.session_state.get("next_upd", False))
     chk_d = c4.checkbox("DTC", value=st.session_state.get("next_dtc", False))
-    remark = st.text_area("비고", value=st.session_state.get("next_remark", ""), height=70)
+    
+    remark = st.text_area("비고 (최대 2줄)", value=st.session_state.get("next_remark", ""), height=70)
     photo_files = st.file_uploader("검사 사진 업로드", type=['jpg', 'jpeg', 'png'], accept_multiple_files=True)
     
     if st.form_submit_button("🚀 등록 / ✅ 수정 완료"):
@@ -69,10 +70,13 @@ with st.form("entry_form", clear_on_submit=False):
             st.session_state.update({"edit_id": None, "current_author": "", "next_vin": "", "next_upd": False, "next_dtc": False, "next_new": False, "next_adj": False, "next_remark": ""})
             st.rerun()
 
-# --- 4. 리스트 및 다운로드 ---
+# --- 4. 통계 및 리스트 출력 (기존 기능) ---
 df = pd.read_sql_query("SELECT * FROM items ORDER BY id DESC", conn)
 search = st.text_input("🔍 이름 또는 VIN 검색")
 if search: df = df[df['item_name'].str.contains(search, na=False) | df['author'].str.contains(search, na=False)]
+
+if not df.empty:
+    st.info(f"📊 총 {len(df)}건 | 신규:{len(df[df['is_new_zero']=='Y'])} | 조절:{len(df[df['is_zero_adj']=='Y'])} | 업뎃:{len(df[df['is_update']=='Y'])} | DTC:{len(df[df['is_dtc']=='Y'])}")
 
 for row in df.itertuples():
     tags = [t for t, cond in [("신규영점", row.is_new_zero=='Y'), ("영점조절", row.is_zero_adj=='Y'), ("업뎃", row.is_update=='Y'), ("DTC", row.is_dtc=='Y')] if cond]
