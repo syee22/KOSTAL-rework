@@ -36,9 +36,9 @@ if "del" in params:
     conn.execute("DELETE FROM items WHERE id=?", (params["del"],))
     conn.commit(); st.query_params.clear(); st.rerun()
 if "edit" in params:
-    row = conn.execute("SELECT * FROM items WHERE id=?", (params["edit"],)).fetchone()
+    row = conn.execute("SELECT id, timestamp, author, item_name, is_update, is_dtc, is_new_zero, is_zero_adj, remark FROM items WHERE id=?", (params["edit"],)).fetchone()
     if row:
-        st.session_state.update({"default_author": row[2], "default_vin": row[3], "default_upd": row[4]=='Y', 
+        st.session_state.update({"edit_id": row[0], "default_author": row[2], "default_vin": row[3], "default_upd": row[4]=='Y', 
                                  "default_dtc": row[5]=='Y', "default_new": row[6]=='Y', "default_adj": row[7]=='Y', "default_remark": row[8]})
     st.query_params.clear(); st.rerun()
 
@@ -50,7 +50,7 @@ df_items = pd.read_sql_query("SELECT * FROM items", conn)
 if not df_master.empty:
     df_master['VIN'] = df_master['VIN'].astype(str).str.strip()
     
-    # 정렬: 아산 우선 및 1,2,3순위 정렬
+    # 아산 우선 및 1,2,3순위 정렬
     df_master['출고그룹'] = df_master['현재출고'].astype(str).str.replace('출고', '').str[-2:]
     df_master['출고그룹'] = pd.Categorical(df_master['출고그룹'], categories=['아산', '울산', '화성'], ordered=True)
     
@@ -68,7 +68,9 @@ if not df_master.empty:
     merged['캘리완료건'] = merged['is_zero_adj'].apply(lambda x: 1 if x == 'Y' else 0)
     
     summary = merged.groupby(['출고그룹', '우선순위그룹'], observed=False).agg({'VIN': 'count', '교체완료건': 'sum', '캘리완료건': 'sum'}).rename(columns={'VIN': '전체수량'})
-    st.dataframe(summary.sort_index(level=['출고그룹', '우선순위그룹']), use_container_width=True, height=200)
+    
+    # 숫자 천 단위 쉼표 서식 적용
+    st.dataframe(summary.sort_index(level=['출고그룹', '우선순위그룹']).style.format("{:,}"), use_container_width=True, height=200)
 
     towrite = io.BytesIO()
     with pd.ExcelWriter(towrite, engine='xlsxwriter') as writer:
