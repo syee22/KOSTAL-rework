@@ -68,8 +68,13 @@ with col1:
     df.to_excel(towrite, index=False)
     st.download_button("📥 현황 저장", data=towrite.getvalue() if not df.empty else b'', file_name="list.xlsx", use_container_width=True)
 with col2:
-    def get_photos():
-        towrite_p = io.BytesIO()
+    # app.py 의 get_photos 함수 부분을 이것으로 교체하세요
+def get_photos():
+    towrite_p = io.BytesIO()
+    try:
+        # 데이터가 비어있으면 빈 바이트 반환
+        if df.empty: return b''
+        
         with pd.ExcelWriter(towrite_p, engine='xlsxwriter') as writer:
             for vin in df['item_name'].unique():
                 photos = db_manager.get_photos_by_vin(conn, vin)
@@ -78,6 +83,9 @@ with col2:
                     for i, (img,) in enumerate(photos):
                         s.insert_image(chr(66+(i*10))+'2', 'p.png', {'image_data': io.BytesIO(img), 'x_scale': 0.3, 'y_scale': 0.3})
         return towrite_p.getvalue()
+    except Exception as e:
+        st.warning("사진 데이터를 불러오는 중 오류가 발생했습니다.")
+        return b''
     st.download_button("📥 사진 저장", data=get_photos() if not df.empty else b'', file_name="photos.xlsx", use_container_width=True)
 
 # 리스트 표시
