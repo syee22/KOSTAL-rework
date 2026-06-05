@@ -26,7 +26,7 @@ def confirm_update(new_author, item_name, new_chk3, new_chk4, new_final_new, new
                      (merged_author, m_upd, m_dtc, m_new, m_adj, m_remark, existing_id))
         conn.commit(); st.session_state.clear(); st.rerun()
 
-# --- 2. 집계 현황 및 엑셀 출력 ---
+# --- 2. 집계 현황 ---
 st.markdown("#### 📋 출고상태 및 우선순위별 완료 현황")
 df_master = db_manager.get_master_data()
 df_items = pd.read_sql_query("SELECT * FROM items", conn)
@@ -49,18 +49,15 @@ with st.form("entry_form", clear_on_submit=False):
     author = col1.text_input("이름", value=st.session_state.get("default_author", ""))
     item_name = col2.text_input("VIN 6자리", value=st.session_state.get("default_vin", ""))
     c1, c2, c3, c4 = st.columns(4)
-    chk1, chk2, chk3, chk4 = c1.checkbox("교체완료", value=st.session_state.get("default_new", False)), \
-                             c2.checkbox("캘리브레이션", value=st.session_state.get("default_adj", False)), \
-                             c3.checkbox("업데이트", value=st.session_state.get("default_upd", False)), \
-                             c4.checkbox("DTC", value=st.checkbox("DTC", value=st.session_state.get("default_dtc", False))) # 오타수정
-    
-    # 체크박스 값 보정
+    chk1 = c1.checkbox("교체완료", value=st.session_state.get("default_new", False))
+    chk2 = c2.checkbox("캘리브레이션", value=st.session_state.get("default_adj", False))
+    chk3 = c3.checkbox("업데이트", value=st.session_state.get("default_upd", False))
     chk4 = c4.checkbox("DTC", value=st.session_state.get("default_dtc", False))
     
     remark = st.text_area("비고", value=st.session_state.get("default_remark", ""))
     
-    if st.form_submit_button("🚀 등록/수정 저장"):
-        # 빈 값 체크
+    submit = st.form_submit_button("🚀 등록/수정 저장")
+    if submit:
         if not item_name or item_name.strip() == "":
             st.error("⚠️ VIN 6자리를 입력해주세요!")
             st.stop()
