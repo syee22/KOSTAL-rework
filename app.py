@@ -33,10 +33,14 @@ df_items = pd.read_sql_query("SELECT * FROM items", conn)
 
 if not df_master.empty:
     df_master['VIN'] = df_master['VIN'].astype(str).str.strip()
-    df_master['출고그룹'] = df_master['현재출고'].astype(str).str.replace('출고', '').str[-2:]
+    
+    # [수정] 6~7번째 글자 추출 (인덱스 5부터 7까지)
+    df_master['출고그룹'] = df_master['현재출고'].astype(str).str[5:7]
     df_master['출고그룹'] = pd.Categorical(df_master['출고그룹'], categories=['아산', '울산', '화성'], ordered=True)
-    df_master['우선순위그룹'] = pd.Categorical(df_master['우선순위'].apply(lambda p: f"{str(p).replace('위', '').strip()}순위" if str(p).replace('위', '').strip() in ['1', '2', '3'] else "기타"), 
-                                        categories=['1순위', '2순위', '3순위', '기타'], ordered=True)
+    
+    order = ['1순위', '2순위', '3순위', '기타']
+    df_master['우선순위그룹'] = df_master['우선순위'].apply(lambda p: f"{str(p).replace('위', '').strip()}순위" if str(p).replace('위', '').strip() in ['1', '2', '3'] else "기타")
+    df_master['우선순위그룹'] = pd.Categorical(df_master['우선순위그룹'], categories=order, ordered=True)
     
     merged = df_master.merge(df_items[['item_name', 'is_new_zero', 'is_zero_adj', 'author', 'timestamp', 'remark']], left_on='VIN', right_on='item_name', how='left')
     merged['교체완료건'] = merged['is_new_zero'].apply(lambda x: 1 if x == 'Y' else 0)
@@ -45,7 +49,6 @@ if not df_master.empty:
     summary = merged.groupby(['출고그룹', '우선순위그룹'], observed=False).agg({'VIN': 'count', '교체완료건': 'sum', '캘리완료건': 'sum'}).rename(columns={'VIN': '전체수량'})
     st.dataframe(summary.sort_index(level=['출고그룹', '우선순위그룹']).style.format("{:,}"), use_container_width=True, height=200)
 
-    # 엑셀 다운로드 (첫 행 고정 및 기능 복구)
     towrite = io.BytesIO()
     with pd.ExcelWriter(towrite, engine='xlsxwriter') as writer:
         df_items.to_excel(writer, sheet_name='작업상세내역', index=False)
