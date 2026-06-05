@@ -7,32 +7,32 @@ import db_manager
 st.set_page_config(page_title="KOSTAL 통합 관리", layout="wide")
 conn = db_manager.init_db()
 
-# --- 1. 현황 집계 및 엑셀 다운로드 ---
+# --- 1. 데이터 병합 및 시트 분리 ---
 st.markdown("#### 📋 전체 현황 (VIN 기준 매칭)")
 df_master = db_manager.get_master_data()
 df_items = pd.read_sql_query("SELECT * FROM items", conn)
 
 if not df_master.empty:
-    # VIN 기준 매칭 처리
     df_master['VIN'] = df_master['VIN'].astype(str).str.strip()
-    
-    # 11개 헤더 대응 (현재출고, 우선순위 처리)
-    df_master['출고상태'] = df_master['현재출고'].astype(str).str.replace('출고', '').str[-2:] if '현재출고' in df_master.columns else '기타'
-    df_master['우선순위그룹'] = df_master['우선순위'].apply(lambda x: str(x) if str(x).isdigit() and int(x) <= 3 else '기타') if '우선순위' in df_master.columns else '기타'
-
-    # 매칭
     df_items['item_name'] = df_items['item_name'].astype(str).str.strip()
+    
+    # 병합
     merged = df_master.merge(df_items, left_on='VIN', right_on='item_name', how='left')
-    merged['상태'] = merged['author'].apply(lambda x: '완료' if pd.notnull(x) else '미완료')
-
-    # 엑셀 파일 생성 로직 (요청하신 기능 반영)
+    
+    # 엑셀 다운로드: 2개 시트로 구성
     towrite = io.BytesIO()
     with pd.ExcelWriter(towrite, engine='xlsxwriter') as writer:
+        # 시트 1: 입력 데이터
+        df_items.to_excel(writer, sheet_name='작업상세내역', index=False)
+        # 시트 2: 전체 현황
         merged.to_excel(writer, sheet_name='전체현황', index=False)
+        
+        # 서식 적용
         ws = writer.sheets['전체현황']
-        ws.set_column('C:M', None, None, {'hidden': True}) # C~M열 숨김
-        ws.freeze_panes(1, 0) # 1행 고정
-    st.download_button("📥 전체 리포트 다운로드", data=towrite.getvalue(), file_name="master_report.xlsx")
+        ws.set_column('C:M', None, None, {'hidden': True})
+        ws.freeze_panes(1, 0)
+        
+    st.download_button("📥 통합 리포트 다운로드 (2개 시트)", data=towrite.getvalue(), file_name="master_report.xlsx")
 
 # --- 2. 입력 폼 ---
 with st.form("entry"):
@@ -48,22 +48,16 @@ with st.form("entry"):
                      (now, author, item_name, 'Y' if chk3 else 'N', 'Y' if chk4 else 'N', 'Y' if (chk1 or chk2) else 'N', 'Y' if chk2 else 'N', remark))
         conn.commit(); st.rerun()
 
-# --- 3. 리스트 출력 (안전한 문자열 변환) ---
+# --- 3. 리스트 출력 ---
 st.markdown("---")
 df = pd.read_sql_query("SELECT * FROM items ORDER BY id DESC", conn)
 for _, row in df.iterrows():
-    # 데이터를 안전하게 추출 (결측치 방지)
     r_id = str(row.get('id', ''))
     name = str(row.get('item_name') or "")
     author = str(row.get('author') or "")
     time = str(row.get('timestamp') or "")
     remark = str(row.get('remark') or "")
-    
-    tags = []
-    if row.get('is_new_zero') == 'Y': tags.append("교체완료")
-    if row.get('is_zero_adj') == 'Y': tags.append("캘리브레이션")
-    if row.get('is_update') == 'Y': tags.append("업뎃")
-    if row.get('is_dtc') == 'Y': tags.append("DTC")
+    tags = [t for t, cond in [("교체", row.get('is_new_zero')=='Y'), ("캘리", row.get('is_zero_adj')=='Y'), ("업뎃", row.get('is_update')=='Y'), ("DTC", row.get('is_dtc')=='Y')] if cond]
     
     st.markdown(f"""<div style="padding: 10px; border-bottom: 1px solid #eee;">
         <b>{name}</b> | {author} | {time}<br>
