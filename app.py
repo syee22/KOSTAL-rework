@@ -19,17 +19,22 @@ if not df_master.empty and not df_items.empty:
     df_master[vin_col] = df_master[vin_col].astype(str).str.strip()
     df_items['item_name'] = df_items['item_name'].astype(str).str.strip()
     
+    # 작업 상세 정보가 전체현황에도 포함되도록 병합
     merged = df_master.merge(df_items, left_on=vin_col, right_on='item_name', how='left')
     merged['상태'] = merged['author'].apply(lambda x: '완료' if pd.notnull(x) else '미완료')
     
+    # 화면 표시용 요약
     summary = merged.groupby([prio_col, '상태']).size().unstack(fill_value=0)
     st.dataframe(summary, use_container_width=True)
     
     # 2개 시트 엑셀 생성
     towrite = io.BytesIO()
     with pd.ExcelWriter(towrite, engine='xlsxwriter') as writer:
+        # 시트 1: 작업 상세 내역 (DB 원본 데이터)
         df_log = df_items[['timestamp', 'item_name', 'author', 'is_update', 'is_dtc', 'is_new_zero', 'is_zero_adj', 'remark']]
         df_log.to_excel(writer, sheet_name='작업상세내역', index=False)
+        
+        # 시트 2: 전체현황 (마스터 + 작업 정보 결합)
         merged.to_excel(writer, sheet_name='전체현황', index=False)
     
     st.download_button("📥 전체 리포트 다운로드 (2개 시트)", data=towrite.getvalue(), file_name="master_report.xlsx", use_container_width=True)
