@@ -82,27 +82,36 @@ with st.form("entry_form"):
             else: conn.execute("UPDATE items SET author=?, item_name=?, is_update=?, is_dtc=?, is_new_zero=?, is_zero_adj=?, remark=? WHERE id=?", (*vals[1:3], *vals[3:], edit_id))
             conn.commit(); st.session_state.update({"edit_id": None}); st.rerun()
 
-# --- 3. 리스트 출력 ---
+# --- 3. 리스트 출력 (가장 안전한 방식) ---
 st.markdown("---")
 df = pd.read_sql_query("SELECT * FROM items ORDER BY id DESC", conn)
 search = st.text_input("🔍 이름 또는 VIN 검색")
 
-for row in df.itertuples():
-    # 데이터 강제 변환 및 안전한 처리
-    r_id = str(row.id)
-    name = str(row.item_name or "")
-    author = str(row.author or "")
-    time = str(row.timestamp or "")
-    remark = str(row.remark or "")
+for _, row in df.iterrows():
+    # 데이터를 딕셔너리로 추출하여 None/NaN 문제 원천 차단
+    data = row.to_dict()
+    
+    r_id = str(data.get('id', ''))
+    name = str(data.get('item_name') or "")
+    author = str(data.get('author') or "")
+    time = str(data.get('timestamp') or "")
+    remark = str(data.get('remark') or "")
     
     tags = []
-    if row.is_new_zero == 'Y': tags.append("교체완료")
-    if row.is_zero_adj == 'Y': tags.append("캘리브레이션")
-    if row.is_update == 'Y': tags.append("업뎃")
-    if row.is_dtc == 'Y': tags.append("DTC")
+    if data.get('is_new_zero') == 'Y': tags.append("교체완료")
+    if data.get('is_zero_adj') == 'Y': tags.append("캘리브레이션")
+    if data.get('is_update') == 'Y': tags.append("업뎃")
+    if data.get('is_dtc') == 'Y': tags.append("DTC")
     
-    st.markdown(f"""<div style="padding: 10px; border-bottom: 1px solid #eee;">
+    tag_html = " | ".join(tags)
+    
+    st.markdown(f"""
+    <div style="padding: 10px; border-bottom: 1px solid #eee;">
         <b>{name}</b> | {author} | {time}<br>
-        <small style="color: #555;">{' | '.join(tags)}</small><br>{remark}<br>
-        <div style="text-align: right;"><a href="/?edit={r_id}">수정</a> | <a href="/?del={r_id}" style="color:red;">삭제</a></div>
-    </div>""", unsafe_html=True)
+        <small style="color: #555;">{tag_html}</small><br>{remark}<br>
+        <div style="text-align: right;">
+            <a href="/?edit={r_id}">수정</a> | 
+            <a href="/?del={r_id}" style="color:red;">삭제</a>
+        </div>
+    </div>
+    """, unsafe_html=True)
