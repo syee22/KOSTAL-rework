@@ -19,14 +19,29 @@ if not df_master.empty:
 
     if not df_items.empty:
         df_items['진행상태'] = df_items['is_zero_adj'].apply(lambda x: '완료' if x == 'Y' else '미완료')
-        merged = df_master.merge(df_items[['item_name', '진행상태']], left_on='VIN', right_on='item_name', how='left')
+        merged = df_master.merge(df_items[['item_name', '진행상태', 'is_new_zero', 'is_zero_adj', 'author', 'timestamp', 'remark']], left_on='VIN', right_on='item_name', how='left')
         merged['진행상태'] = merged['진행상태'].fillna('미완료')
     else:
         merged = df_master.copy()
         merged['진행상태'] = '미완료'
 
     summary = merged.groupby(['출고그룹', '우선순위그룹', '진행상태']).size().unstack(fill_value=0)
-    st.dataframe(summary, use_container_width=True)
+    # 높이 조절 (height=200으로 좁게 설정)
+    st.dataframe(summary, use_container_width=True, height=200)
+
+    # 엑셀 다운로드 (Q, R, S열 배치)
+    towrite = io.BytesIO()
+    with pd.ExcelWriter(towrite, engine='xlsxwriter') as writer:
+        df_items.to_excel(writer, sheet_name='작업상세내역', index=False)
+        report_df = merged.copy()
+        report_df['Q_교체완료'] = report_df['is_new_zero'].fillna('N')
+        report_df['R_캘리브레이션'] = report_df['is_zero_adj'].fillna('N')
+        report_df['S_진행상태'] = report_df['진행상태']
+        report_df.to_excel(writer, sheet_name='전체현황', index=False)
+        ws = writer.sheets['전체현황']
+        ws.set_column('C:M', None, None, {'hidden': True})
+        ws.freeze_panes(1, 0)
+    st.download_button("📥 통합 리포트 다운로드 (2개 시트)", data=towrite.getvalue(), file_name="master_report.xlsx")
 
 # --- 2. 삭제 및 수정 파라미터 처리 ---
 params = st.query_params
