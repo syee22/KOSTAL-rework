@@ -28,18 +28,14 @@ def confirm_update(new_author, item_name, new_chk3, new_chk4, new_final_new, new
     if st.button("종합하여 저장"):
         conn.execute("UPDATE items SET author=?, is_update=?, is_dtc=?, is_new_zero=?, is_zero_adj=?, remark=? WHERE id=?",
                      (merged_author, m_upd, m_dtc, m_new, m_adj, m_remark, existing_id))
-        conn.commit()
-        st.session_state.clear()
-        st.rerun()
-    if st.button("취소"):
-        st.rerun()
+        conn.commit(); st.session_state.clear(); st.rerun()
+    if st.button("취소"): st.rerun()
 
-# --- 2. 수정/삭제/조회 파라미터 ---
+# --- 2. 파라미터 처리 ---
 params = st.query_params
 if "del" in params:
     conn.execute("DELETE FROM items WHERE id=?", (params["del"],))
     conn.commit(); st.query_params.clear(); st.rerun()
-
 if "edit" in params:
     row = conn.execute("SELECT * FROM items WHERE id=?", (params["edit"],)).fetchone()
     if row:
@@ -47,8 +43,8 @@ if "edit" in params:
                                  "default_dtc": row[5]=='Y', "default_new": row[6]=='Y', "default_adj": row[7]=='Y', "default_remark": row[8]})
     st.query_params.clear(); st.rerun()
 
-# --- 3. 집계 현황 및 리포트 ---
-st.markdown("#### 📋 출고상태 및 우선순위별 현황 (캘리브레이션=완료)")
+# --- 3. 집계 현황 및 엑셀 출력 ---
+st.markdown("#### 📋 출고상태 및 우선순위별 현황")
 df_master = db_manager.get_master_data()
 df_items = pd.read_sql_query("SELECT * FROM items", conn)
 
@@ -65,13 +61,15 @@ if not df_master.empty:
         merged = df_master.copy()
         merged['진행상태'] = '미완료'
 
-    summary = merged.groupby(['출고그룹', '우선순위그룹', '진행상태']).size().unstack(fill_value=0)
-    st.dataframe(summary, use_container_width=True, height=200)
+    st.dataframe(merged.groupby(['출고그룹', '우선순위그룹', '진행상태']).size().unstack(fill_value=0), use_container_width=True, height=200)
 
     towrite = io.BytesIO()
     with pd.ExcelWriter(towrite, engine='xlsxwriter') as writer:
         df_items.to_excel(writer, sheet_name='작업상세내역', index=False)
         report_df = merged.copy()
+        # KeyError 방어 로직
+        for col in ['is_new_zero', 'is_zero_adj']:
+            if col not in report_df.columns: report_df[col] = 'N'
         report_df['Q_교체완료'] = report_df['is_new_zero'].fillna('N')
         report_df['R_캘리브레이션'] = report_df['is_zero_adj'].fillna('N')
         report_df['S_진행상태'] = report_df['진행상태']
@@ -105,12 +103,10 @@ with st.form("entry", clear_on_submit=False):
 
 # --- 5. 리스트 출력 ---
 st.markdown("---")
-df = pd.read_sql_query("SELECT * FROM items ORDER BY id DESC", conn)
-for _, row in df.iterrows():
-    r_id = str(row['id'])
+for _, row in pd.read_sql_query("SELECT * FROM items ORDER BY id DESC", conn).iterrows():
     tags = [t for t, cond in [("교체", row['is_new_zero']=='Y'), ("캘리", row['is_zero_adj']=='Y'), ("업뎃", row['is_update']=='Y'), ("DTC", row['is_dtc']=='Y')] if cond]
     st.markdown(f"""<div style="padding: 10px; border-bottom: 1px solid #eee;">
         <b>{row['item_name']}</b> | {row['author']} | {row['timestamp']}<br>
         <small>{' | '.join(tags)}</small><br>{row['remark'] or ""}<br>
-        <div style="text-align: right;"><a href="/?edit={r_id}">수정</a> | <a href="/?del={r_id}" style="color:red;">삭제</a></div>
+        <div style="text-align: right;"><a href="/?edit={row['id']}">수정</a> | <a href="/?del={row['id']}" style="color:red;">삭제</a></div>
     </div>""", unsafe_allow_html=True)
