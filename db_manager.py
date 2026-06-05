@@ -3,7 +3,6 @@ import pandas as pd
 import os
 
 def init_db():
-    # 기존 DB 파일명 유지
     db_path = 'kostal_final_v2.db'
     conn = sqlite3.connect(db_path, check_same_thread=False)
     
@@ -20,25 +19,19 @@ def init_db():
     conn.commit()
     return conn
 
-# [핵심] Git 저장소의 마스터 파일을 읽어오는 함수
 def get_master_data():
-    # 프로젝트 폴더 내 master_vin_list.xlsx 파일 읽기
     if os.path.exists('master_vin_list.xlsx'):
         return pd.read_excel('master_vin_list.xlsx')
     return pd.DataFrame()
 
-# 기존 함수들 (변경 없음)
 def save_photos_to_db(conn, item_name, photo_files):
     for photo in photo_files:
-        image_data = photo.read()
-        conn.execute("INSERT INTO photos (item_name, image) VALUES (?, ?)", (item_name, image_data))
+        conn.execute("INSERT INTO photos (item_name, image) VALUES (?, ?)", (item_name, photo.read()))
     conn.commit()
 
 def get_photos_by_vin(conn, item_name):
-    try:
-        return conn.execute("SELECT image FROM photos WHERE item_name = ?", (item_name,)).fetchall()
-    except:
-        return []
+    try: return conn.execute("SELECT image FROM photos WHERE item_name = ?", (item_name,)).fetchall()
+    except: return []
 
 def delete_all_data_by_vin(conn, id, item_name):
     conn.execute("DELETE FROM items WHERE id = ?", (id,))
