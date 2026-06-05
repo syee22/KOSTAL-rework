@@ -12,31 +12,39 @@ st.markdown("#### 📋 우선순위별 작업 완료 현황")
 df_master = db_manager.get_master_data()
 df_items = pd.read_sql_query("SELECT * FROM items", conn)
 
-if not df_master.empty and not df_items.empty:
+if not df_master.empty:
     vin_col = df_master.columns[0]
     prio_col = df_master.columns[1] if len(df_master.columns) > 1 else df_master.columns[0]
     
+    # VIN 데이터 정제
     df_master[vin_col] = df_master[vin_col].astype(str).str.strip()
-    df_items['item_name'] = df_items['item_name'].astype(str).str.strip()
+    if not df_items.empty:
+        df_items['item_name'] = df_items['item_name'].astype(str).str.strip()
     
+    # 마스터 기반으로 작업 내역 병합 (작업 이력이 없는 경우도 마스터 리스트 유지)
     merged = df_master.merge(df_items, left_on=vin_col, right_on='item_name', how='left')
     merged['상태'] = merged['author'].apply(lambda x: '완료' if pd.notnull(x) else '미완료')
     
-    summary = merged.groupby([prio_col, '상태']).size().unstack(fill_value=0)
-    st.dataframe(summary, use_container_width=True)
+    # 화면 요약 표
+    if not df_items.empty:
+        summary = merged.groupby([prio_col, '상태']).size().unstack(fill_value=0)
+        st.dataframe(summary, use_container_width=True)
     
+    # 2개 시트 엑셀 다운로드
     towrite = io.BytesIO()
     with pd.ExcelWriter(towrite, engine='xlsxwriter') as writer:
-        df_log = df_items[['timestamp', 'item_name', 'author', 'is_update', 'is_dtc', 'is_new_zero', 'is_zero_adj', 'remark']]
-        df_log.to_excel(writer, sheet_name='작업상세내역', index=False)
+        # 시트 1: 작업 상세 내역 (DB 원본)
+        if not df_items.empty:
+            df_log = df_items[['timestamp', 'item_name', 'author', 'is_update', 'is_dtc', 'is_new_zero', 'is_zero_adj', 'remark']]
+            df_log.to_excel(writer, sheet_name='작업상세내역', index=False)
         
-        # 전체현황에 상세 내역 포함
-        cols = [vin_col, prio_col, '상태', 'timestamp', 'author', 'is_update', 'is_dtc', 'is_new_zero', 'is_zero_adj', 'remark']
-        merged[cols].to_excel(writer, sheet_name='전체현황', index=False)
+        # 시트 2: 전체현황 (마스터 정보 + 작업 상세 내용 결합)
+        # 작업 상세 내역의 모든 컬럼을 마스터와 결합된 merged에 담아 출력
+        merged.to_excel(writer, sheet_name='전체현황', index=False)
     
     st.download_button("📥 전체 리포트 다운로드 (2개 시트)", data=towrite.getvalue(), file_name="master_report.xlsx", use_container_width=True)
 
-# --- 2. 파라미터 로직 (삭제/수정) ---
+# --- 2. 파라미터 로직 ---
 params = st.query_params
 if "del" in params:
     del_id = int(params["del"])
