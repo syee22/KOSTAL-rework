@@ -4,7 +4,7 @@ def init_db():
     # 데이터베이스 파일 연결
     conn = sqlite3.connect('kostal_data.db', check_same_thread=False)
     
-    # 1. 메인 리워크 테이블 생성 (4개 체크박스 + 비고란 추가)
+    # 1. 메인 리워크 테이블 생성 (요청하신 신규 3개 컬럼 포함)
     conn.execute('''
         CREATE TABLE IF NOT EXISTS items (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
