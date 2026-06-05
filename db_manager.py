@@ -6,7 +6,7 @@ DB_NAME = "kostal_data.db"
 MASTER_FILE = "master_vin_list.xlsx"
 
 def init_db():
-    conn = sqlite3.connect(DB_NAME, check_same_thread=False)
+    conn = sqlite3.connect(DB_NAME, check_same_thread=False, timeout=10)
     conn.execute("""
         CREATE TABLE IF NOT EXISTS items (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
