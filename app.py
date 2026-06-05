@@ -40,7 +40,6 @@ if not df_master.empty:
     summary = merged.groupby(['우선순위그룹', '출고상태', '상태']).size().unstack(fill_value=0)
     st.dataframe(summary, use_container_width=True)
     
-    # 2개 시트 엑셀 생성
     towrite = io.BytesIO()
     with pd.ExcelWriter(towrite, engine='xlsxwriter') as writer:
         if not df_items.empty:
@@ -62,7 +61,7 @@ if "edit" in params:
     edit_id = int(params["edit"])
     row = conn.execute("SELECT * FROM items WHERE id=?", (edit_id,)).fetchone()
     if row:
-        st.session_state.update({"edit_id": row[0], "current_author": row[2], "next_vin": row[3], "next_upd": (row[4]=='Y'), "next_dtc": (row[5]=='Y'), "next_new": (row[6]=='Y'), "next_adj": (row[7]=='Y'), "next_remark": row[8]})
+        st.session_state.update({"edit_id": row[0], "current_author": str(row[2] or ""), "next_vin": str(row[3] or ""), "next_upd": (row[4]=='Y'), "next_dtc": (row[5]=='Y'), "next_new": (row[6]=='Y'), "next_adj": (row[7]=='Y'), "next_remark": str(row[8] or "")})
     st.query_params.clear(); st.rerun()
 
 # --- 3. 입력 폼 ---
@@ -103,16 +102,22 @@ with st.form("entry_form", clear_on_submit=False):
 df = pd.read_sql_query("SELECT * FROM items ORDER BY id DESC", conn)
 search = st.text_input("🔍 이름 또는 VIN 검색")
 if search: 
-    df = df[df['item_name'].astype(str).str.contains(search, na=False) | df['author'].astype(str).str.contains(search, na=False)]
+    df = df[df['item_name'].fillna('').astype(str).str.contains(search) | df['author'].fillna('').astype(str).str.contains(search)]
 
-for row in df.itertuples():
-    name = str(row.item_name or "")
-    author = str(row.author or "")
-    time = str(row.timestamp or "")
-    remark = str(row.remark or "")
-    tags = [t for t, cond in [("교체완료", row.is_new_zero=='Y'), ("캘리브레이션", row.is_zero_adj=='Y'), ("업뎃", row.is_update=='Y'), ("DTC", row.is_dtc=='Y')] if cond]
+for _, row in df.iterrows():
+    name = str(row.get('item_name') or "")
+    author = str(row.get('author') or "")
+    time = str(row.get('timestamp') or "")
+    remark = str(row.get('remark') or "")
+    
+    tags = []
+    if row.get('is_new_zero') == 'Y': tags.append("교체완료")
+    if row.get('is_zero_adj') == 'Y': tags.append("캘리브레이션")
+    if row.get('is_update') == 'Y': tags.append("업뎃")
+    if row.get('is_dtc') == 'Y': tags.append("DTC")
+    
     st.markdown(f"""<div style="padding: 10px; border-bottom: 1px solid #eee;">
         <b>{name}</b> | {author} | {time}<br>
         <small style="color: #555;">{' | '.join(tags)}</small><br>{remark}<br>
-        <div style="text-align: right;"><a href="/?edit={row.id}">수정</a> | <a href="/?del={row.id}" style="color:red;">삭제</a></div>
-    </div>""", unsafe_html=True)
+        <div style="text-align: right;"><a href="/?edit={row['id']}">수정</a> | <a href="/?del={row['id']}" style="color:red;">삭제</a></div>
+    </div>""", unsafe_allow_html=True)
