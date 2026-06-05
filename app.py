@@ -10,29 +10,23 @@ conn = db_manager.init_db()
 # --- 1. 중복 데이터 종합 다이얼로그 ---
 @st.dialog("중복 데이터 종합!")
 def confirm_update(new_author, item_name, new_chk3, new_chk4, new_final_new, new_chk2, new_remark, existing_id):
-    # 기존 데이터 불러오기
     row = conn.execute("SELECT author, is_update, is_dtc, is_new_zero, is_zero_adj, remark FROM items WHERE id=?", (existing_id,)).fetchone()
     ex_author, ex_upd, ex_dtc, ex_new, ex_adj, ex_remark = row
 
     # 데이터 종합 로직
-    # 1. 작성자 이름 합치기 (중복 제거)
     authors = list(set([a.strip() for a in str(ex_author).split('/')] + [new_author]))
     merged_author = "/".join([a for a in authors if a])
-    
-    # 2. 체크박스 종합 (하나라도 'Y'면 'Y' 유지)
     m_upd = 'Y' if (ex_upd == 'Y' or new_chk3) else 'N'
     m_dtc = 'Y' if (ex_dtc == 'Y' or new_chk4) else 'N'
     m_new = 'Y' if (ex_new == 'Y' or new_final_new == 'Y') else 'N'
     m_adj = 'Y' if (ex_adj == 'Y' or new_chk2) else 'N'
-    
-    # 3. 비고 합치기 (다를 경우에만 추가)
     m_remark = f"{ex_remark} / {new_remark}" if (new_remark and ex_remark != new_remark) else (ex_remark or new_remark)
 
     st.write(f"VIN **{item_name}** 기존 기록과 종합합니다.")
     st.info(f"종합 예정 작성자: {merged_author}")
     
     if st.button("종합하여 저장"):
-        conn.execute("""UPDATE items SET author=?, is_update=?, is_dtc=?, is_new_zero=?, is_zero_adj=?, remark=? WHERE id=?""",
+        conn.execute("UPDATE items SET author=?, is_update=?, is_dtc=?, is_new_zero=?, is_zero_adj=?, remark=? WHERE id=?",
                      (merged_author, m_upd, m_dtc, m_new, m_adj, m_remark, existing_id))
         conn.commit()
         st.session_state.clear()
@@ -54,7 +48,7 @@ if "edit" in params:
     st.query_params.clear(); st.rerun()
 
 # --- 3. 집계 현황 및 리포트 ---
-st.markdown("#### 📋 출고상태 및 우선순위별 현황")
+st.markdown("#### 📋 출고상태 및 우선순위별 현황 (캘리브레이션=완료)")
 df_master = db_manager.get_master_data()
 df_items = pd.read_sql_query("SELECT * FROM items", conn)
 
