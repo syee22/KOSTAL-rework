@@ -1,10 +1,10 @@
 import sqlite3
 
 def init_db():
-    # 데이터베이스 파일 연결
-    conn = sqlite3.connect('kostal_data.db', check_same_thread=False)
+    # 파일명을 바꾸면 서버에 남아있던 이전 꼬인 파일과 무관하게 새 DB가 생성됩니다.
+    db_path = 'kostal_final.db'
+    conn = sqlite3.connect(db_path, check_same_thread=False)
     
-    # 1. 메인 리워크 테이블 생성 (요청하신 신규 3개 컬럼 포함)
     conn.execute('''
         CREATE TABLE IF NOT EXISTS items (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -19,7 +19,6 @@ def init_db():
         )
     ''')
     
-    # 2. 사진 저장용 테이블 생성
     conn.execute('''
         CREATE TABLE IF NOT EXISTS photos (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -37,7 +36,11 @@ def save_photos_to_db(conn, item_name, photo_files):
     conn.commit()
 
 def get_photos_by_vin(conn, item_name):
-    return conn.execute("SELECT image FROM photos WHERE item_name = ?", (item_name,)).fetchall()
+    # 안전장치: 테이블이 없는 경우를 대비
+    try:
+        return conn.execute("SELECT image FROM photos WHERE item_name = ?", (item_name,)).fetchall()
+    except:
+        return []
 
 def delete_all_data_by_vin(conn, id, item_name):
     conn.execute("DELETE FROM items WHERE id = ?", (id,))
