@@ -49,8 +49,6 @@ df_items = pd.read_sql_query("SELECT * FROM items", conn)
 
 if not df_master.empty:
     df_master['VIN'] = df_master['VIN'].astype(str).str.strip()
-    
-    # 아산 우선 및 1,2,3순위 정렬
     df_master['출고그룹'] = df_master['현재출고'].astype(str).str.replace('출고', '').str[-2:]
     df_master['출고그룹'] = pd.Categorical(df_master['출고그룹'], categories=['아산', '울산', '화성'], ordered=True)
     
@@ -68,13 +66,13 @@ if not df_master.empty:
     merged['캘리완료건'] = merged['is_zero_adj'].apply(lambda x: 1 if x == 'Y' else 0)
     
     summary = merged.groupby(['출고그룹', '우선순위그룹'], observed=False).agg({'VIN': 'count', '교체완료건': 'sum', '캘리완료건': 'sum'}).rename(columns={'VIN': '전체수량'})
-    
-    # 숫자 천 단위 쉼표 서식 적용
     st.dataframe(summary.sort_index(level=['출고그룹', '우선순위그룹']).style.format("{:,}"), use_container_width=True, height=200)
 
     towrite = io.BytesIO()
     with pd.ExcelWriter(towrite, engine='xlsxwriter') as writer:
         df_items.to_excel(writer, sheet_name='작업상세내역', index=False)
+        writer.sheets['작업상세내역'].freeze_panes(1, 0)
+        
         report_df = merged.copy()
         for col in ['is_new_zero', 'is_zero_adj']:
             if col not in report_df.columns: report_df[col] = 'N'
@@ -83,6 +81,7 @@ if not df_master.empty:
         report_df['S_진행상태'] = report_df['is_zero_adj'].apply(lambda x: '완료' if x == 'Y' else '미완료')
         report_df.to_excel(writer, sheet_name='전체현황', index=False)
         ws = writer.sheets['전체현황']
+        ws.freeze_panes(1, 0)
         ws.set_column('C:M', None, None, {'hidden': True})
     st.download_button("📥 통합 리포트 다운로드", data=towrite.getvalue(), file_name="master_report.xlsx")
 
