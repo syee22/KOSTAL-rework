@@ -1,9 +1,10 @@
 import sqlite3
 
+# db_manager.py 수정 코드
 def init_db():
     conn = sqlite3.connect('kostal_data.db', check_same_thread=False)
     
-    # 기존 5개 컬럼 구조로 테이블 생성
+    # 테이블이 없으면 확실히 생성
     conn.execute('''
         CREATE TABLE IF NOT EXISTS items (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -15,7 +16,7 @@ def init_db():
         )
     ''')
     
-    # 사진 저장용 테이블
+    # photos 테이블이 없으면 확실히 생성
     conn.execute('''
         CREATE TABLE IF NOT EXISTS photos (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
