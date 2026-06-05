@@ -49,7 +49,11 @@ df_items = pd.read_sql_query("SELECT * FROM items", conn)
 
 if not df_master.empty:
     df_master['VIN'] = df_master['VIN'].astype(str).str.strip()
+    
+    # 정렬: 아산 우선 및 1,2,3순위 정렬
     df_master['출고그룹'] = df_master['현재출고'].astype(str).str.replace('출고', '').str[-2:]
+    df_master['출고그룹'] = pd.Categorical(df_master['출고그룹'], categories=['아산', '울산', '화성'], ordered=True)
+    
     order = ['1순위', '2순위', '3순위', '기타']
     df_master['우선순위그룹'] = df_master['우선순위'].apply(lambda p: f"{str(p).replace('위', '').strip()}순위" if str(p).replace('위', '').strip() in ['1', '2', '3'] else "기타")
     df_master['우선순위그룹'] = pd.Categorical(df_master['우선순위그룹'], categories=order, ordered=True)
@@ -64,7 +68,7 @@ if not df_master.empty:
     merged['캘리완료건'] = merged['is_zero_adj'].apply(lambda x: 1 if x == 'Y' else 0)
     
     summary = merged.groupby(['출고그룹', '우선순위그룹'], observed=False).agg({'VIN': 'count', '교체완료건': 'sum', '캘리완료건': 'sum'}).rename(columns={'VIN': '전체수량'})
-    st.dataframe(summary.sort_index(level='우선순위그룹'), use_container_width=True, height=200)
+    st.dataframe(summary.sort_index(level=['출고그룹', '우선순위그룹']), use_container_width=True, height=200)
 
     towrite = io.BytesIO()
     with pd.ExcelWriter(towrite, engine='xlsxwriter') as writer:
