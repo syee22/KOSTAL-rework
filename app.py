@@ -1,13 +1,13 @@
 import streamlit as st
 import pandas as pd
-import io, pytz
+import pytz
 from datetime import datetime
 import db_manager
 
 st.set_page_config(page_title="KOSTAL 통합 관리", layout="wide")
 conn = db_manager.init_db()
 
-# --- 1. 중복 데이터 종합 다이얼로그 ---
+# --- 1. 중복 데이터 종합 다이얼로그 (이전과 동일) ---
 @st.dialog("중복 데이터 종합!")
 def confirm_update(new_author, item_name, new_chk3, new_chk4, new_final_new, new_chk2, new_remark, existing_id):
     row = conn.execute("SELECT author, is_update, is_dtc, is_new_zero, is_zero_adj, remark FROM items WHERE id=?", (existing_id,)).fetchone()
@@ -26,26 +26,24 @@ def confirm_update(new_author, item_name, new_chk3, new_chk4, new_final_new, new
                      (merged_author, m_upd, m_dtc, m_new, m_adj, m_remark, existing_id))
         conn.commit(); st.session_state.clear(); st.rerun()
 
-# --- 2. 집계 현황 및 엑셀 출력 (기존과 동일) ---
+# --- 2. 집계 현황 및 엑셀 출력 (이전과 동일) ---
 st.markdown("#### 📋 출고상태 및 우선순위별 완료 현황")
+# ... (집계 로직 및 엑셀 다운로드 동일)
 df_master = db_manager.get_master_data()
 df_items = pd.read_sql_query("SELECT * FROM items", conn)
-
 if not df_master.empty:
     df_master['VIN'] = df_master['VIN'].astype(str).str.strip()
     df_master['출고그룹'] = df_master['현재출고'].astype(str).str.replace('출고', '').str[-2:]
     df_master['출고그룹'] = pd.Categorical(df_master['출고그룹'], categories=['아산', '울산', '화성'], ordered=True)
     df_master['우선순위그룹'] = pd.Categorical(df_master['우선순위'].apply(lambda p: f"{str(p).replace('위', '').strip()}순위" if str(p).replace('위', '').strip() in ['1', '2', '3'] else "기타"), 
                                         categories=['1순위', '2순위', '3순위', '기타'], ordered=True)
-    
     merged = df_master.merge(df_items[['item_name', 'is_new_zero', 'is_zero_adj']], left_on='VIN', right_on='item_name', how='left')
     merged['교체완료건'] = merged['is_new_zero'].apply(lambda x: 1 if x == 'Y' else 0)
     merged['캘리완료건'] = merged['is_zero_adj'].apply(lambda x: 1 if x == 'Y' else 0)
-    
     summary = merged.groupby(['출고그룹', '우선순위그룹'], observed=False).agg({'VIN': 'count', '교체완료건': 'sum', '캘리완료건': 'sum'}).rename(columns={'VIN': '전체수량'})
     st.dataframe(summary.sort_index(level=['출고그룹', '우선순위그룹']).style.format("{:,}"), use_container_width=True, height=200)
 
-# --- 3. 입력 및 수정 폼 ---
+# --- 3. 입력 폼 ---
 with st.form("entry_form", clear_on_submit=False):
     st.subheader("📝 등록 / 수정")
     col1, col2 = st.columns(2)
@@ -61,11 +59,11 @@ with st.form("entry_form", clear_on_submit=False):
     if st.form_submit_button("🚀 등록/수정 저장"):
         edit_id = st.session_state.get("edit_id")
         final_new = 'Y' if (chk1 or chk2) else 'N'
-        if edit_id: # 수정 모드
+        if edit_id:
             conn.execute("UPDATE items SET author=?, is_update=?, is_dtc=?, is_new_zero=?, is_zero_adj=?, remark=? WHERE id=?",
                          (author, 'Y' if chk3 else 'N', 'Y' if chk4 else 'N', final_new, 'Y' if chk2 else 'N', remark, edit_id))
             conn.commit(); st.session_state.clear(); st.rerun()
-        else: # 신규 등록 모드
+        else:
             existing = conn.execute("SELECT id FROM items WHERE item_name=?", (item_name.strip(),)).fetchone()
             if existing: confirm_update(author, item_name, chk3, chk4, final_new, chk2, remark, existing[0])
             else:
@@ -73,11 +71,25 @@ with st.form("entry_form", clear_on_submit=False):
                              (datetime.now(pytz.timezone('Asia/Seoul')).strftime('%m-%d %H:%M'), author, item_name.strip(), 'Y' if chk3 else 'N', 'Y' if chk4 else 'N', final_new, 'Y' if chk2 else 'N', remark))
                 conn.commit(); st.session_state.clear(); st.rerun()
 
-# --- 4. 리스트 출력 및 제어 ---
-st.markdown("---")
-for _, row in pd.read_sql_query("SELECT * FROM items ORDER BY id DESC", conn).iterrows():
+# --- 4. 검색 및 리스트 현황 ---
+st.subheader("🔍 작업 리스트 현황")
+search_query = st.text_input("VIN 검색", placeholder="VIN 번호로 검색하세요...")
+df_list = pd.read_sql_query("SELECT * FROM items ORDER BY id DESC", conn)
+
+if search_query:
+    df_list = df_list[df_list['item_name'].str.contains(search_query, na=False)]
+
+for _, row in df_list.iterrows():
+    # 상태 태그 생성
+    tags = []
+    if row['is_new_zero'] == 'Y': tags.append("✅교체")
+    if row['is_zero_adj'] == 'Y': tags.append("⚙️캘리")
+    if row['is_update'] == 'Y': tags.append("🔄업뎃")
+    if row['is_dtc'] == 'Y': tags.append("⚠️DTC")
+    tag_str = " ".join(tags)
+    
     c1, c2, c3 = st.columns([6, 1, 1])
-    c1.write(f"**{row['item_name']}** | {row['author']} | {row['timestamp']}")
+    c1.markdown(f"**{row['item_name']}** | {row['author']} | {row['timestamp']} | <small>{tag_str}</small>", unsafe_allow_html=True)
     if c2.button("수정", key=f"edit_{row['id']}"):
         st.session_state.update({"edit_id": row['id'], "default_author": row['author'], "default_vin": row['item_name'], 
                                  "default_upd": row['is_update']=='Y', "default_dtc": row['is_dtc']=='Y', 
