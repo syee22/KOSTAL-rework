@@ -40,12 +40,24 @@ if not df_master.empty:
     summary = merged.groupby(['우선순위그룹', '출고상태', '상태']).size().unstack(fill_value=0)
     st.dataframe(summary, use_container_width=True)
     
+    # 2개 시트 엑셀 생성
     towrite = io.BytesIO()
     with pd.ExcelWriter(towrite, engine='xlsxwriter') as writer:
         if not df_items.empty:
             df_log = df_items[['timestamp', 'item_name', 'author', 'is_update', 'is_dtc', 'is_new_zero', 'is_zero_adj', 'remark']]
             df_log.to_excel(writer, sheet_name='작업상세내역', index=False)
+        
         merged.to_excel(writer, sheet_name='전체현황', index=False)
+        
+        # 엑셀 서식 적용
+        workbook = writer.book
+        worksheet = writer.sheets['전체현황']
+        
+        # C열(2)부터 M열(12)까지 숨김 처리 (set_column에 hidden 옵션 사용)
+        worksheet.set_column('C:M', None, None, {'hidden': True})
+        
+        # 첫 번째 행 고정
+        worksheet.freeze_panes(1, 0)
     
     st.download_button("📥 전체 리포트 다운로드 (2개 시트)", data=towrite.getvalue(), file_name="master_report.xlsx", use_container_width=True)
 
@@ -98,7 +110,7 @@ with st.form("entry_form", clear_on_submit=False):
             st.session_state.update({"edit_id": None, "current_author": "", "next_vin": "", "next_upd": False, "next_dtc": False, "next_new": False, "next_adj": False, "next_remark": ""})
             st.rerun()
 
-# --- 4. 리스트 출력 (안전성 강화) ---
+# --- 4. 리스트 출력 ---
 df = pd.read_sql_query("SELECT * FROM items ORDER BY id DESC", conn)
 search = st.text_input("🔍 이름 또는 VIN 검색")
 if search: 
@@ -120,4 +132,4 @@ for _, row in df.iterrows():
         <b>{name}</b> | {author} | {time}<br>
         <small style="color: #555;">{' | '.join(tags)}</small><br>{remark}<br>
         <div style="text-align: right;"><a href="/?edit={row['id']}">수정</a> | <a href="/?del={row['id']}" style="color:red;">삭제</a></div>
-    </div>""", unsafe_allow_html=True)
+    </div>""", unsafe_html=True)
