@@ -29,17 +29,11 @@ if "edit" in params:
 
 st.markdown("#### 📱 KOSTAL 리워크 현황")
 
-if st.session_state.get("edit_id"):
-    st.warning(f"현재 ID {st.session_state['edit_id']} 수정 중")
-    if st.button("수정 취소"):
-        st.session_state.update({"edit_id": None, "current_author": "", "next_vin": "", "next_upd": False, "next_dtc": False, "next_new": False, "next_adj": False, "next_remark": ""})
-        st.rerun()
-
+# 수정 모드 폼
 with st.form("entry_form", clear_on_submit=False):
     author = st.text_input("이름", value=st.session_state.get("current_author", ""))
     item_name = st.text_input("VIN 6자리", value=st.session_state.get("next_vin", ""), max_chars=6)
     
-    # 요청하신 순서대로 배치 (신규영점, 영점조절, 업데이트, DTC)
     c1, c2, c3, c4 = st.columns(4)
     chk_new = c1.checkbox("신규영점", value=st.session_state.get("next_new", False))
     chk_adj = c2.checkbox("영점조절", value=st.session_state.get("next_adj", False))
@@ -70,8 +64,16 @@ with st.form("entry_form", clear_on_submit=False):
             st.session_state.update({"edit_id": None, "current_author": "", "next_vin": "", "next_upd": False, "next_dtc": False, "next_new": False, "next_adj": False, "next_remark": ""})
             st.rerun()
 
-# 리스트 표시
+# --- 집계 섹션 ---
 df = pd.read_sql_query("SELECT * FROM items ORDER BY id DESC", conn)
+if not df.empty:
+    cnt_new = len(df[df['is_new_zero'] == 'Y'])
+    cnt_adj = len(df[df['is_zero_adj'] == 'Y'])
+    cnt_upd = len(df[df['is_update'] == 'Y'])
+    cnt_dtc = len(df[df['is_dtc'] == 'Y'])
+    st.info(f"📊 총 {len(df)}건 | 신규영점:{cnt_new} | 영점조절:{cnt_adj} | 업뎃:{cnt_upd} | DTC:{cnt_dtc}")
+
+# 리스트 표시
 for row in df.itertuples():
     tag_list = [t for t, cond in [("신규영점", row.is_new_zero=='Y'), ("영점조절", row.is_zero_adj=='Y'), ("업뎃", row.is_update=='Y'), ("DTC", row.is_dtc=='Y')] if cond]
     st.markdown(f"""
