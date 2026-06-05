@@ -43,19 +43,17 @@ if not df_master.empty:
             df_log = df_items[['timestamp', 'item_name', 'author', 'is_update', 'is_dtc', 'is_new_zero', 'is_zero_adj', 'remark']]
             df_log.to_excel(writer, sheet_name='작업상세내역', index=False)
         merged.to_excel(writer, sheet_name='전체현황', index=False)
-        workbook = writer.book
         worksheet = writer.sheets['전체현황']
         worksheet.set_column('C:M', None, None, {'hidden': True})
         worksheet.freeze_panes(1, 0)
-    st.download_button("📥 전체 리포트 다운로드 (2개 시트)", data=towrite.getvalue(), file_name="master_report.xlsx", use_container_width=True)
+    st.download_button("📥 전체 리포트 다운로드 (2개 시트)", data=towrite.getvalue(), file_name="master_report.xlsx")
 
 # --- 2. 입력 및 삭제 로직 ---
 params = st.query_params
 if "del" in params:
     del_id = int(params["del"])
-    row = conn.execute("SELECT item_name FROM items WHERE id=?", (del_id,)).fetchone()
-    if row: db_manager.delete_all_data_by_vin(conn, del_id, row[0])
-    st.query_params.clear(); st.rerun()
+    conn.execute("DELETE FROM items WHERE id=?", (del_id,))
+    conn.commit(); st.query_params.clear(); st.rerun()
 
 if "edit" in params:
     edit_id = int(params["edit"])
@@ -84,21 +82,24 @@ with st.form("entry_form"):
             else: conn.execute("UPDATE items SET author=?, item_name=?, is_update=?, is_dtc=?, is_new_zero=?, is_zero_adj=?, remark=? WHERE id=?", (*vals[1:3], *vals[3:], edit_id))
             conn.commit(); st.session_state.update({"edit_id": None}); st.rerun()
 
-# --- 3. 리스트 출력 (가장 강제적인 타입 변환) ---
+# --- 3. 리스트 출력 ---
+st.markdown("---")
 df = pd.read_sql_query("SELECT * FROM items ORDER BY id DESC", conn)
+search = st.text_input("🔍 이름 또는 VIN 검색")
+
 for row in df.itertuples():
-    # 모든 값을 강제로 문자열화 하여 HTML 렌더링 안전성 확보
-    name = str(getattr(row, 'item_name', '') or "")
-    author = str(getattr(row, 'author', '') or "")
-    time = str(getattr(row, 'timestamp', '') or "")
-    remark = str(getattr(row, 'remark', '') or "")
-    r_id = str(getattr(row, 'id', ''))
+    # 데이터 강제 변환 및 안전한 처리
+    r_id = str(row.id)
+    name = str(row.item_name or "")
+    author = str(row.author or "")
+    time = str(row.timestamp or "")
+    remark = str(row.remark or "")
     
     tags = []
-    if getattr(row, 'is_new_zero', '') == 'Y': tags.append("교체완료")
-    if getattr(row, 'is_zero_adj', '') == 'Y': tags.append("캘리브레이션")
-    if getattr(row, 'is_update', '') == 'Y': tags.append("업뎃")
-    if getattr(row, 'is_dtc', '') == 'Y': tags.append("DTC")
+    if row.is_new_zero == 'Y': tags.append("교체완료")
+    if row.is_zero_adj == 'Y': tags.append("캘리브레이션")
+    if row.is_update == 'Y': tags.append("업뎃")
+    if row.is_dtc == 'Y': tags.append("DTC")
     
     st.markdown(f"""<div style="padding: 10px; border-bottom: 1px solid #eee;">
         <b>{name}</b> | {author} | {time}<br>
