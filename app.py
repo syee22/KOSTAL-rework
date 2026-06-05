@@ -13,7 +13,6 @@ def confirm_update(new_author, item_name, new_chk3, new_chk4, new_final_new, new
     row = conn.execute("SELECT author, is_update, is_dtc, is_new_zero, is_zero_adj, remark FROM items WHERE id=?", (existing_id,)).fetchone()
     ex_author, ex_upd, ex_dtc, ex_new, ex_adj, ex_remark = row
 
-    # 데이터 종합 로직
     authors = list(set([a.strip() for a in str(ex_author).split('/')] + [new_author]))
     merged_author = "/".join([a for a in authors if a])
     m_upd = 'Y' if (ex_upd == 'Y' or new_chk3) else 'N'
@@ -31,7 +30,7 @@ def confirm_update(new_author, item_name, new_chk3, new_chk4, new_final_new, new
         conn.commit(); st.session_state.clear(); st.rerun()
     if st.button("취소"): st.rerun()
 
-# --- 2. 파라미터 처리 ---
+# --- 2. 수정/삭제/조회 파라미터 ---
 params = st.query_params
 if "del" in params:
     conn.execute("DELETE FROM items WHERE id=?", (params["del"],))
@@ -44,14 +43,18 @@ if "edit" in params:
     st.query_params.clear(); st.rerun()
 
 # --- 3. 집계 현황 및 엑셀 출력 ---
-st.markdown("#### 📋 출고상태 및 우선순위별 현황")
+st.markdown("#### 📋 출고상태 및 우선순위별 현황 (캘리브레이션=완료)")
 df_master = db_manager.get_master_data()
 df_items = pd.read_sql_query("SELECT * FROM items", conn)
 
 if not df_master.empty:
     df_master['VIN'] = df_master['VIN'].astype(str).str.strip()
     df_master['출고그룹'] = df_master['현재출고'].astype(str).str.replace('출고', '').str[-2:]
+    
+    # 1순위, 2순위, 3순위, 기타 정렬 적용
+    order = ['1순위', '2순위', '3순위', '기타']
     df_master['우선순위그룹'] = df_master['우선순위'].apply(lambda p: f"{str(p).replace('위', '').strip()}순위" if str(p).replace('위', '').strip() in ['1', '2', '3'] else "기타")
+    df_master['우선순위그룹'] = pd.Categorical(df_master['우선순위그룹'], categories=order, ordered=True)
 
     if not df_items.empty:
         df_items['진행상태'] = df_items['is_zero_adj'].apply(lambda x: '완료' if x == 'Y' else '미완료')
@@ -61,13 +64,14 @@ if not df_master.empty:
         merged = df_master.copy()
         merged['진행상태'] = '미완료'
 
-    st.dataframe(merged.groupby(['출고그룹', '우선순위그룹', '진행상태']).size().unstack(fill_value=0), use_container_width=True, height=200)
+    # 정렬 적용하여 출력
+    summary = merged.groupby(['출고그룹', '우선순위그룹', '진행상태'], observed=False).size().unstack(fill_value=0)
+    st.dataframe(summary.sort_index(level='우선순위그룹'), use_container_width=True, height=200)
 
     towrite = io.BytesIO()
     with pd.ExcelWriter(towrite, engine='xlsxwriter') as writer:
         df_items.to_excel(writer, sheet_name='작업상세내역', index=False)
         report_df = merged.copy()
-        # KeyError 방어 로직
         for col in ['is_new_zero', 'is_zero_adj']:
             if col not in report_df.columns: report_df[col] = 'N'
         report_df['Q_교체완료'] = report_df['is_new_zero'].fillna('N')
