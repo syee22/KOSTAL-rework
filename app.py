@@ -7,14 +7,14 @@ import db_manager
 st.set_page_config(page_title="KOSTAL 통합 관리", layout="centered")
 conn = db_manager.init_db()
 
-# --- 1. Git 마스터 기반 실적 대조 ---
+# --- 1. Git 마스터 기반 우선순위별 현황 집계 ---
 st.markdown("#### 📋 우선순위별 작업 완료 현황")
 df_master = db_manager.get_master_data()
 df_items = pd.read_sql_query("SELECT item_name, author FROM items", conn)
 
 if not df_master.empty:
     vin_col = df_master.columns[0]
-    prio_col = df_master.columns[1] 
+    prio_col = df_master.columns[1] if len(df_master.columns) > 1 else df_master.columns[0]
     
     merged = df_master.merge(df_items, left_on=vin_col, right_on='item_name', how='left')
     merged['상태'] = merged['author'].apply(lambda x: '완료' if pd.notnull(x) else '미완료')
@@ -44,18 +44,13 @@ if "edit" in params:
 # --- 3. 입력 폼 (텍스트 변경 및 자동 체크 로직) ---
 st.markdown("#### 📱 KOSTAL 리워크 현황")
 
-# 캘리브레이션 체크 시 교체완료 자동 체크 함수
-def sync_checkbox():
-    if st.session_state.chk_adj:
-        st.session_state.chk_new = True
-
 with st.form("entry_form", clear_on_submit=False):
     author = st.text_input("이름", value=st.session_state.get("current_author", ""))
     item_name = st.text_input("VIN 6자리", value=st.session_state.get("next_vin", ""), max_chars=6)
     
     c1, c2, c3, c4 = st.columns(4)
     chk_new = c1.checkbox("교체완료", key="chk_new", value=st.session_state.get("next_new", False))
-    chk_adj = c2.checkbox("캘리브레이션", key="chk_adj", value=st.session_state.get("next_adj", False), on_change=sync_checkbox)
+    chk_adj = c2.checkbox("캘리브레이션", key="chk_adj", value=st.session_state.get("next_adj", False))
     chk_u = c3.checkbox("업데이트", value=st.session_state.get("next_upd", False))
     chk_d = c4.checkbox("DTC", value=st.session_state.get("next_dtc", False))
     
@@ -63,13 +58,20 @@ with st.form("entry_form", clear_on_submit=False):
     photo_files = st.file_uploader("검사 사진 업로드", type=['jpg', 'jpeg', 'png'], accept_multiple_files=True)
     
     if st.form_submit_button("🚀 등록 / ✅ 수정 완료"):
-        if not item_name: st.error("VIN 번호를 입력하세요.")
+        if not item_name: 
+            st.error("VIN 번호를 입력하세요.")
         else:
+            # 캘리브레이션 체크 시 교체완료 자동 True 처리
+            final_new = True if st.session_state.chk_adj else st.session_state.chk_new
+            
             kst = pytz.timezone('Asia/Seoul')
             now = datetime.now(kst).strftime('%m-%d %H:%M')
-            # 체크박스 값은 session_state에서 직접 가져옴
-            vals = (now, author, item_name, 'Y' if chk_u else 'N', 'Y' if chk_d else 'N', 
-                    'Y' if st.session_state.chk_new else 'N', 'Y' if st.session_state.chk_adj else 'N', remark)
+            vals = (now, author, item_name, 
+                    'Y' if chk_u else 'N', 
+                    'Y' if chk_d else 'N', 
+                    'Y' if final_new else 'N', 
+                    'Y' if st.session_state.chk_adj else 'N', 
+                    remark)
             
             edit_id = st.session_state.get("edit_id")
             if not edit_id:
