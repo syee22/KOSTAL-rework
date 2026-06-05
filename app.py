@@ -52,10 +52,8 @@ if not df_master.empty:
         # 엑셀 서식 적용
         workbook = writer.book
         worksheet = writer.sheets['전체현황']
-        
-        # C열(2)부터 M열(12)까지 숨김 처리 (set_column에 hidden 옵션 사용)
+        # C열(2)부터 M열(12)까지 숨김 처리
         worksheet.set_column('C:M', None, None, {'hidden': True})
-        
         # 첫 번째 행 고정
         worksheet.freeze_panes(1, 0)
     
@@ -110,26 +108,30 @@ with st.form("entry_form", clear_on_submit=False):
             st.session_state.update({"edit_id": None, "current_author": "", "next_vin": "", "next_upd": False, "next_dtc": False, "next_new": False, "next_adj": False, "next_remark": ""})
             st.rerun()
 
-# --- 4. 리스트 출력 ---
+# --- 4. 리스트 출력 (안정성 강화) ---
 df = pd.read_sql_query("SELECT * FROM items ORDER BY id DESC", conn)
 search = st.text_input("🔍 이름 또는 VIN 검색")
 if search: 
     df = df[df['item_name'].fillna('').astype(str).str.contains(search) | df['author'].fillna('').astype(str).str.contains(search)]
 
-for _, row in df.iterrows():
-    name = str(row.get('item_name') or "")
-    author = str(row.get('author') or "")
-    time = str(row.get('timestamp') or "")
-    remark = str(row.get('remark') or "")
+for row in df.itertuples():
+    row_id = getattr(row, 'id', '')
+    name = str(getattr(row, 'item_name', '') or "")
+    author = str(getattr(row, 'author', '') or "")
+    time = str(getattr(row, 'timestamp', '') or "")
+    remark = str(getattr(row, 'remark', '') or "")
     
     tags = []
-    if row.get('is_new_zero') == 'Y': tags.append("교체완료")
-    if row.get('is_zero_adj') == 'Y': tags.append("캘리브레이션")
-    if row.get('is_update') == 'Y': tags.append("업뎃")
-    if row.get('is_dtc') == 'Y': tags.append("DTC")
+    if getattr(row, 'is_new_zero', '') == 'Y': tags.append("교체완료")
+    if getattr(row, 'is_zero_adj', '') == 'Y': tags.append("캘리브레이션")
+    if getattr(row, 'is_update', '') == 'Y': tags.append("업뎃")
+    if getattr(row, 'is_dtc', '') == 'Y': tags.append("DTC")
     
     st.markdown(f"""<div style="padding: 10px; border-bottom: 1px solid #eee;">
         <b>{name}</b> | {author} | {time}<br>
         <small style="color: #555;">{' | '.join(tags)}</small><br>{remark}<br>
-        <div style="text-align: right;"><a href="/?edit={row['id']}">수정</a> | <a href="/?del={row['id']}" style="color:red;">삭제</a></div>
+        <div style="text-align: right;">
+            <a href="/?edit={row_id}">수정</a> | 
+            <a href="/?del={row_id}" style="color:red;">삭제</a>
+        </div>
     </div>""", unsafe_html=True)
