@@ -27,7 +27,6 @@ def get_master_data():
     if os.path.exists(MASTER_FILE):
         try:
             df = pd.read_excel(MASTER_FILE)
-            # 모든 컬럼명을 문자열로 변환하고 공백 제거 (매칭 오류 방지)
             df.columns = [str(c).strip() for c in df.columns]
             return df
         except Exception:
