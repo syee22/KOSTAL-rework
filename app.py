@@ -26,6 +26,43 @@ def confirm_update(new_author, item_name, new_chk3, new_chk4, new_final_new, new
                      (merged_author, m_upd, m_dtc, m_new, m_adj, m_remark, existing_id))
         conn.commit(); st.session_state.clear(); st.rerun()
 
+
+# --- 1-2. [신규 추가] 마스터 미등록 경고 다이얼로그 ---
+@st.dialog("⚠️ 마스터 미등록 VIN - 확인 필요")
+def confirm_master_missing(author, item_name, chk3, chk4, final_new, chk2, remark, edit_id=None):
+    st.warning(f"입력하신 VIN **{item_name}**은 고객사 마스터 리스트에 존재하지 않습니다.")
+    st.write("VIN 오타 또는 미등록 차량인지 **확인 필요** 상태입니다. 정보를 다시 검토해 주세요.")
+    
+    col1, col2 = st.columns(2)
+    if col1.button("닫기 (수정하기)", use_container_width=True):
+        st.rerun()
+        
+    if col2.button("확인 완료 (그대로 저장)", use_container_width=True):
+        if edit_id:
+            conn.execute("UPDATE items SET author=?, is_update=?, is_dtc=?, is_new_zero=?, is_zero_adj=?, remark=? WHERE id=?",
+                         (author, 'Y' if chk3 else 'N', 'Y' if chk4 else 'N', final_new, 'Y' if chk2 else 'N', remark, edit_id))
+        else:
+            existing = conn.execute("SELECT id FROM items WHERE item_name=?", (item_name,)).fetchone()
+            if existing:
+                row = conn.execute("SELECT author, is_update, is_dtc, is_new_zero, is_zero_adj, remark FROM items WHERE id=?", (existing[0],)).fetchone()
+                ex_author, ex_upd, ex_dtc, ex_new, ex_adj, ex_remark = row
+                authors = list(set([a.strip() for a in str(ex_author).split('/')] + [author]))
+                merged_author = "/".join([a for a in authors if a])
+                m_upd = 'Y' if (ex_upd == 'Y' or chk3) else 'N'
+                m_dtc = 'Y' if (ex_dtc == 'Y' or chk4) else 'N'
+                m_new = 'Y' if (ex_new == 'Y' or final_new == 'Y') else 'N'
+                m_adj = 'Y' if (ex_adj == 'Y' or chk2) else 'N'
+                m_remark = f"{ex_remark} / {remark}" if (remark and ex_remark != remark) else (ex_remark or remark)
+                conn.execute("UPDATE items SET author=?, is_update=?, is_dtc=?, is_new_zero=?, is_zero_adj=?, remark=? WHERE id=?",
+                             (merged_author, m_upd, m_dtc, m_new, m_adj, m_remark, existing[0]))
+            else:
+                conn.execute("INSERT INTO items (timestamp, author, item_name, is_update, is_dtc, is_new_zero, is_zero_adj, remark) VALUES (?,?,?,?,?,?,?,?)",
+                             (datetime.now(pytz.timezone('Asia/Seoul')).strftime('%m-%d %H:%M'), author, item_name, 'Y' if chk3 else 'N', 'Y' if chk4 else 'N', final_new, 'Y' if chk2 else 'N', remark))
+        conn.commit()
+        st.session_state.clear()
+        st.rerun()
+
+
 # --- 2. 집계 현황 및 엑셀 출력 ---
 counts = db_manager.get_completion_counts()
 st.markdown(f"#### 📋 출고상태 및 우선순위별 완료 현황 (교체완료: {counts['update']}건, 캘리완료: {counts['cali']}건)")
@@ -84,19 +121,32 @@ with st.form("entry_form", clear_on_submit=False):
             st.error("⚠️ VIN 6자리를 입력해주세요!")
             st.stop()
         
+        vin_striped = item_name.strip()
         edit_id = st.session_state.get("edit_id")
         final_new = 'Y' if (chk1 or chk2) else 'N'
-        if edit_id:
-            conn.execute("UPDATE items SET author=?, is_update=?, is_dtc=?, is_new_zero=?, is_zero_adj=?, remark=? WHERE id=?",
-                         (author, 'Y' if chk3 else 'N', 'Y' if chk4 else 'N', final_new, 'Y' if chk2 else 'N', remark, edit_id))
-            conn.commit(); st.session_state.clear(); st.rerun()
+        
+        # [수정] 마스터 리스트에 존재하는 VIN인지 검증 (마스터 파일이 유효한 경우만 검사)
+        is_in_master = True
+        if not df_master.empty:
+            is_in_master = vin_striped in df_master['VIN'].values
+        
+        if not is_in_master:
+            # 마스터에 없는 경우 경고 다이얼로그 생성 (사용자에게 알림)
+            confirm_master_missing(author, vin_striped, chk3, chk4, final_new, chk2, remark, edit_id)
         else:
-            existing = conn.execute("SELECT id FROM items WHERE item_name=?", (item_name.strip(),)).fetchone()
-            if existing: confirm_update(author, item_name, chk3, chk4, final_new, chk2, remark, existing[0])
-            else:
-                conn.execute("INSERT INTO items (timestamp, author, item_name, is_update, is_dtc, is_new_zero, is_zero_adj, remark) VALUES (?,?,?,?,?,?,?,?)",
-                             (datetime.now(pytz.timezone('Asia/Seoul')).strftime('%m-%d %H:%M'), author, item_name.strip(), 'Y' if chk3 else 'N', 'Y' if chk4 else 'N', final_new, 'Y' if chk2 else 'N', remark))
+            # 마스터에 등록된 정상적인 데이터인 경우 기존 프로세스 진행
+            if edit_id:
+                conn.execute("UPDATE items SET author=?, is_update=?, is_dtc=?, is_new_zero=?, is_zero_adj=?, remark=? WHERE id=?",
+                             (author, 'Y' if chk3 else 'N', 'Y' if chk4 else 'N', final_new, 'Y' if chk2 else 'N', remark, edit_id))
                 conn.commit(); st.session_state.clear(); st.rerun()
+            else:
+                existing = conn.execute("SELECT id FROM items WHERE item_name=?", (vin_striped,)).fetchone()
+                if existing: 
+                    confirm_update(author, vin_striped, chk3, chk4, final_new, chk2, remark, existing[0])
+                else:
+                    conn.execute("INSERT INTO items (timestamp, author, item_name, is_update, is_dtc, is_new_zero, is_zero_adj, remark) VALUES (?,?,?,?,?,?,?,?)",
+                                 (datetime.now(pytz.timezone('Asia/Seoul')).strftime('%m-%d %H:%M'), author, vin_striped, 'Y' if chk3 else 'N', 'Y' if chk4 else 'N', final_new, 'Y' if chk2 else 'N', remark))
+                    conn.commit(); st.session_state.clear(); st.rerun()
 
 # --- 4. 검색 및 리스트 현황 ---
 st.subheader("🔍 작업 리스트 현황")
