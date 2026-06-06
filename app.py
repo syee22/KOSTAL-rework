@@ -99,7 +99,11 @@ if not df_master.empty:
         report_df['R_캘리브레이션'] = report_df['is_zero_adj'].fillna('N')
         report_df['S_진행상태'] = report_df['is_zero_adj'].apply(lambda x: '완료' if x == 'Y' else '미완료')
         
-        # 엑셀 출력 전 모든 NA/NaN 결측치를 빈 문자열("")로 일괄 변환하여 셀을 깔끔하게 비웁니다.
+        # [수정] Categorical 타입(출고그룹 등)을 일반 object 타입으로 변경하여 TypeError 방지
+        for col in report_df.select_dtypes(include=['category']).columns:
+            report_df[col] = report_df[col].astype(object)
+            
+        # 엑셀 출력 전 모든 NA/NaN 결측치를 빈 문자열("")로 일괄 변환
         report_df = report_df.fillna("")
         
         report_df.to_excel(writer, sheet_name='전체현황', index=False)
@@ -153,21 +157,18 @@ with st.form("entry_form", clear_on_submit=False):
 
 # --- 4. 검색 및 리스트 현황 ---
 st.subheader("🔍 작업 리스트 현황")
-# [수정] 검색 필드 안내 문구 변경 및 이름 검색 결합
 search_query = st.text_input("VIN 또는 이름 검색", placeholder="VIN 번호 또는 이름으로 검색하세요...")
 df_list = pd.read_sql_query("SELECT * FROM items ORDER BY id DESC", conn)
 
 df_list['item_name'] = df_list['item_name'].astype(str).str.strip()
 df_list['author'] = df_list['author'].astype(str).str.strip()
 
-# [수정] VIN(item_name) 또는 이름(author) 중 하나라도 검색어를 포함하면 필터링되도록 보완
 if search_query:
     df_list = df_list[
         df_list['item_name'].str.contains(search_query, na=False) | 
         df_list['author'].str.contains(search_query, na=False)
     ]
 
-# [신규 추가] 실시간으로 필터링된 결과 개수를 직관적으로 표시
 st.markdown(f"📊 검색 결과: 총 **{len(df_list)}**건")
 
 for _, row in df_list.iterrows():
