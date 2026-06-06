@@ -27,7 +27,6 @@ def confirm_update(new_author, item_name, new_chk3, new_chk4, new_final_new, new
         conn.commit(); st.session_state.clear(); st.rerun()
 
 # --- 2. 집계 현황 및 엑셀 출력 ---
-# [수정] 완료 개수 가져오기
 counts = db_manager.get_completion_counts()
 st.markdown(f"#### 📋 출고상태 및 우선순위별 완료 현황 (교체완료: {counts['update']}건, 캘리완료: {counts['cali']}건)")
 
@@ -36,6 +35,7 @@ df_items = pd.read_sql_query("SELECT * FROM items", conn)
 
 if not df_master.empty:
     df_master['VIN'] = df_master['VIN'].astype(str).str.strip()
+    
     df_master['출고그룹'] = df_master['현재출고'].astype(str).str.split('출고').str[0].str[-2:]
     df_master['출고그룹'] = pd.Categorical(df_master['출고그룹'], categories=['아산', '울산', '화성'], ordered=True)
     
@@ -66,5 +66,59 @@ if not df_master.empty:
         ws.set_column('C:M', None, None, {'hidden': True})
     st.download_button("📥 통합 리포트 다운로드", data=towrite.getvalue(), file_name="master_report.xlsx")
 
-# --- 3. 입력 폼 (이하 동일) ---
-# ... (생략: 기존 코드와 동일)
+# --- 3. 입력 폼 ---
+with st.form("entry_form", clear_on_submit=False):
+    st.subheader("📝 등록 / 수정")
+    col1, col2 = st.columns(2)
+    author = col1.text_input("이름", value=st.session_state.get("default_author", ""))
+    item_name = col2.text_input("VIN 6자리", value=st.session_state.get("default_vin", ""))
+    c1, c2, c3, c4 = st.columns(4)
+    chk1 = c1.checkbox("교체완료", value=st.session_state.get("default_new", False))
+    chk2 = c2.checkbox("캘리브레이션", value=st.session_state.get("default_adj", False))
+    chk3 = c3.checkbox("업데이트", value=st.session_state.get("default_upd", False))
+    chk4 = c4.checkbox("DTC", value=st.session_state.get("default_dtc", False))
+    remark = st.text_area("비고", value=st.session_state.get("default_remark", ""))
+    
+    if st.form_submit_button("🚀 등록/수정 저장"):
+        if not item_name or item_name.strip() == "":
+            st.error("⚠️ VIN 6자리를 입력해주세요!")
+            st.stop()
+        
+        edit_id = st.session_state.get("edit_id")
+        final_new = 'Y' if (chk1 or chk2) else 'N'
+        if edit_id:
+            conn.execute("UPDATE items SET author=?, is_update=?, is_dtc=?, is_new_zero=?, is_zero_adj=?, remark=? WHERE id=?",
+                         (author, 'Y' if chk3 else 'N', 'Y' if chk4 else 'N', final_new, 'Y' if chk2 else 'N', remark, edit_id))
+            conn.commit(); st.session_state.clear(); st.rerun()
+        else:
+            existing = conn.execute("SELECT id FROM items WHERE item_name=?", (item_name.strip(),)).fetchone()
+            if existing: confirm_update(author, item_name, chk3, chk4, final_new, chk2, remark, existing[0])
+            else:
+                conn.execute("INSERT INTO items (timestamp, author, item_name, is_update, is_dtc, is_new_zero, is_zero_adj, remark) VALUES (?,?,?,?,?,?,?,?)",
+                             (datetime.now(pytz.timezone('Asia/Seoul')).strftime('%m-%d %H:%M'), author, item_name.strip(), 'Y' if chk3 else 'N', 'Y' if chk4 else 'N', final_new, 'Y' if chk2 else 'N', remark))
+                conn.commit(); st.session_state.clear(); st.rerun()
+
+# --- 4. 검색 및 리스트 현황 ---
+st.subheader("🔍 작업 리스트 현황")
+search_query = st.text_input("VIN 검색", placeholder="VIN 번호로 검색하세요...")
+df_list = pd.read_sql_query("SELECT * FROM items ORDER BY id DESC", conn)
+if search_query:
+    df_list = df_list[df_list['item_name'].str.contains(search_query, na=False)]
+
+for _, row in df_list.iterrows():
+    tags = []
+    if row['is_new_zero'] == 'Y': tags.append("✅교체")
+    if row['is_zero_adj'] == 'Y': tags.append("⚙️캘리")
+    if row['is_update'] == 'Y': tags.append("🔄업뎃")
+    if row['is_dtc'] == 'Y': tags.append("⚠️DTC")
+    tag_str = " ".join(tags)
+    
+    c1, c2, c3 = st.columns([6, 1, 1])
+    c1.markdown(f"**{row['item_name']}** | {row['author']} | {row['timestamp']} | <small>{tag_str}</small>", unsafe_allow_html=True)
+    if c2.button("수정", key=f"edit_{row['id']}"):
+        st.session_state.update({"edit_id": row['id'], "default_author": row['author'], "default_vin": row['item_name'], 
+                                 "default_upd": row['is_update']=='Y', "default_dtc": row['is_dtc']=='Y', 
+                                 "default_new": row['is_new_zero']=='Y', "default_adj": row['is_zero_adj']=='Y', "default_remark": row['remark']})
+        st.rerun()
+    if c3.button("삭제", key=f"del_{row['id']}"):
+        conn.execute("DELETE FROM items WHERE id=?", (row['id'],)); conn.commit(); st.rerun()
