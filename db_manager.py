@@ -23,6 +23,17 @@ def init_db():
     conn.commit()
     return conn
 
+def get_completion_counts():
+    conn = sqlite3.connect(DB_NAME, check_same_thread=False, timeout=10)
+    cursor = conn.cursor()
+    # 'is_new_zero'가 'Y'인 경우를 '교체완료', 'is_zero_adj'가 'Y'인 경우를 '캘리완료'로 카운트
+    cursor.execute("SELECT COUNT(*) FROM items WHERE is_new_zero = 'Y'")
+    update_count = cursor.fetchone()[0]
+    cursor.execute("SELECT COUNT(*) FROM items WHERE is_zero_adj = 'Y'")
+    cali_count = cursor.fetchone()[0]
+    conn.close()
+    return {"update": update_count, "cali": cali_count}
+
 def get_master_data():
     if os.path.exists(MASTER_FILE):
         try:
