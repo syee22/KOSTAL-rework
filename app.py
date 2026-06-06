@@ -26,8 +26,7 @@ def confirm_update(new_author, item_name, new_chk3, new_chk4, new_final_new, new
                      (merged_author, m_upd, m_dtc, m_new, m_adj, m_remark, existing_id))
         conn.commit(); st.session_state.clear(); st.rerun()
 
-
-# --- 1-2. [신규 추가] 마스터 미등록 경고 다이얼로그 ---
+# --- 1-2. 마스터 미등록 경고 다이얼로그 ---
 @st.dialog("⚠️ 마스터 미등록 VIN - 확인 필요")
 def confirm_master_missing(author, item_name, chk3, chk4, final_new, chk2, remark, edit_id=None):
     st.warning(f"입력하신 VIN **{item_name}**은 고객사 마스터 리스트에 존재하지 않습니다.")
@@ -62,7 +61,6 @@ def confirm_master_missing(author, item_name, chk3, chk4, final_new, chk2, remar
         st.session_state.clear()
         st.rerun()
 
-
 # --- 2. 집계 현황 및 엑셀 출력 ---
 counts = db_manager.get_completion_counts()
 st.markdown(f"#### 📋 출고상태 및 우선순위별 완료 현황 (교체완료: {counts['update']}건, 캘리완료: {counts['cali']}건)")
@@ -72,6 +70,7 @@ df_items = pd.read_sql_query("SELECT * FROM items", conn)
 
 if not df_master.empty:
     df_master['VIN'] = df_master['VIN'].astype(str).str.strip()
+    df_items['item_name'] = df_items['item_name'].astype(str).str.strip()
     
     df_master['출고그룹'] = df_master['현재출고'].astype(str).str.split('출고').str[0].str[-2:]
     df_master['출고그룹'] = pd.Categorical(df_master['출고그룹'], categories=['아산', '울산', '화성'], ordered=True)
@@ -91,16 +90,23 @@ if not df_master.empty:
     with pd.ExcelWriter(towrite, engine='xlsxwriter') as writer:
         df_items.to_excel(writer, sheet_name='작업상세내역', index=False)
         writer.sheets['작업상세내역'].freeze_panes(1, 0)
+        
         report_df = merged.copy()
         for col in ['is_new_zero', 'is_zero_adj']:
             if col not in report_df.columns: report_df[col] = 'N'
+        
         report_df['Q_교체완료'] = report_df['is_new_zero'].fillna('N')
         report_df['R_캘리브레이션'] = report_df['is_zero_adj'].fillna('N')
         report_df['S_진행상태'] = report_df['is_zero_adj'].apply(lambda x: '완료' if x == 'Y' else '미완료')
+        
+        # 엑셀 출력 전 모든 NA/NaN 결측치를 빈 문자열("")로 일괄 변환하여 셀을 깔끔하게 비웁니다.
+        report_df = report_df.fillna("")
+        
         report_df.to_excel(writer, sheet_name='전체현황', index=False)
         ws = writer.sheets['전체현황']
         ws.freeze_panes(1, 0)
         ws.set_column('C:M', None, None, {'hidden': True})
+        
     st.download_button("📥 통합 리포트 다운로드", data=towrite.getvalue(), file_name="master_report.xlsx")
 
 # --- 3. 입력 폼 ---
@@ -125,16 +131,13 @@ with st.form("entry_form", clear_on_submit=False):
         edit_id = st.session_state.get("edit_id")
         final_new = 'Y' if (chk1 or chk2) else 'N'
         
-        # [수정] 마스터 리스트에 존재하는 VIN인지 검증 (마스터 파일이 유효한 경우만 검사)
         is_in_master = True
         if not df_master.empty:
             is_in_master = vin_striped in df_master['VIN'].values
         
         if not is_in_master:
-            # 마스터에 없는 경우 경고 다이얼로그 생성 (사용자에게 알림)
             confirm_master_missing(author, vin_striped, chk3, chk4, final_new, chk2, remark, edit_id)
         else:
-            # 마스터에 등록된 정상적인 데이터인 경우 기존 프로세스 진행
             if edit_id:
                 conn.execute("UPDATE items SET author=?, is_update=?, is_dtc=?, is_new_zero=?, is_zero_adj=?, remark=? WHERE id=?",
                              (author, 'Y' if chk3 else 'N', 'Y' if chk4 else 'N', final_new, 'Y' if chk2 else 'N', remark, edit_id))
@@ -150,10 +153,22 @@ with st.form("entry_form", clear_on_submit=False):
 
 # --- 4. 검색 및 리스트 현황 ---
 st.subheader("🔍 작업 리스트 현황")
-search_query = st.text_input("VIN 검색", placeholder="VIN 번호로 검색하세요...")
+# [수정] 검색 필드 안내 문구 변경 및 이름 검색 결합
+search_query = st.text_input("VIN 또는 이름 검색", placeholder="VIN 번호 또는 이름으로 검색하세요...")
 df_list = pd.read_sql_query("SELECT * FROM items ORDER BY id DESC", conn)
+
+df_list['item_name'] = df_list['item_name'].astype(str).str.strip()
+df_list['author'] = df_list['author'].astype(str).str.strip()
+
+# [수정] VIN(item_name) 또는 이름(author) 중 하나라도 검색어를 포함하면 필터링되도록 보완
 if search_query:
-    df_list = df_list[df_list['item_name'].str.contains(search_query, na=False)]
+    df_list = df_list[
+        df_list['item_name'].str.contains(search_query, na=False) | 
+        df_list['author'].str.contains(search_query, na=False)
+    ]
+
+# [신규 추가] 실시간으로 필터링된 결과 개수를 직관적으로 표시
+st.markdown(f"📊 검색 결과: 총 **{len(df_list)}**건")
 
 for _, row in df_list.iterrows():
     tags = []
